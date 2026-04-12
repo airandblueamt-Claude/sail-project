@@ -87,6 +87,14 @@ def index():
                 LIMIT 10
             """).fetchall()
 
+            admin_stats['expiring_agreements'] = conn.execute(
+                "SELECT COUNT(*) FROM equipment_agreements "
+                "WHERE end_date >= date('now') AND end_date <= date('now', '+30 days')"
+            ).fetchone()[0]
+            admin_stats['expired_agreements'] = conn.execute(
+                "SELECT COUNT(*) FROM equipment_agreements WHERE end_date < date('now')"
+            ).fetchone()[0]
+
         # Category breakdown
         categories = conn.execute("""
             SELECT c.name, COUNT(*) as models,

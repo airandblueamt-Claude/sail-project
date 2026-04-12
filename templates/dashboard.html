@@ -122,6 +122,20 @@
     </div>
 </div>
 
+{% if admin_stats.expiring_agreements > 0 or admin_stats.expired_agreements > 0 %}
+<div class="info-banner info-banner-warning" style="margin-top:16px;">
+    <i data-lucide="file-check"></i>
+    <div>
+        <strong>Agreement Alerts:</strong>
+        {% if admin_stats.expired_agreements > 0 %}{{ admin_stats.expired_agreements }} expired{% endif %}
+        {% if admin_stats.expired_agreements > 0 and admin_stats.expiring_agreements > 0 %} · {% endif %}
+        {% if admin_stats.expiring_agreements > 0 %}{{ admin_stats.expiring_agreements }} expiring within 30 days{% endif %}
+        — <a href="{{ url_for('inventory.agreements_overview', status='expiring') }}">View All</a>
+    </div>
+</div>
+<script>lucide.createIcons();</script>
+{% endif %}
+
 {% if pending_approvals %}
 <div class="section">
     <div class="section-header">

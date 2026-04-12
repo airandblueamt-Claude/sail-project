@@ -46,6 +46,9 @@
             <li><a href="{{ url_for('inventory.manage_assets') }}" class="{% if request.endpoint == 'inventory.manage_assets' %}active{% endif %}">
                 <i data-lucide="hard-drive"></i> Manage Assets
             </a></li>
+            <li><a href="{{ url_for('inventory.agreements_overview') }}" class="{% if request.endpoint == 'inventory.agreements_overview' %}active{% endif %}">
+                <i data-lucide="file-check"></i> Agreements
+            </a></li>
             <li><a href="{{ url_for('employees.list_employees') }}" class="{% if request.blueprint == 'employees' %}active{% endif %}">
                 <i data-lucide="users"></i> Employees
             </a></li>

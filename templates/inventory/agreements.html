@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Agreements Overview{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('inventory.all_models') }}" class="breadcrumb">Inventory</a>
+        <h2>Agreements & Licenses ({{ total }})</h2>
+    </div>
+</div>
+
+<!-- Filters -->
+<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;">
+        <select name="type" class="form-input" style="width:auto;" onchange="this.form.submit()">
+            <option value="">All Types</option>
+            <option value="Warranty" {% if type_filter == 'Warranty' %}selected{% endif %}>Warranty</option>
+            <option value="Support Contract" {% if type_filter == 'Support Contract' %}selected{% endif %}>Support Contract</option>
+            <option value="Software License" {% if type_filter == 'Software License' %}selected{% endif %}>Software License</option>
+            <option value="Subscription" {% if type_filter == 'Subscription' %}selected{% endif %}>Subscription</option>
+        </select>
+        <select name="status" class="form-input" style="width:auto;" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+            <option value="expiring" {% if status_filter == 'expiring' %}selected{% endif %}>Expiring Soon</option>
+            <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired</option>
+        </select>
+    </form>
+</div>
+
+{% if agreements %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Equipment</th>
+            <th>Type</th>
+            <th>Provider</th>
+            <th>Period</th>
+            <th>Status</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ag in agreements %}
+        <tr>
+            <td>
+                <a href="{{ url_for('inventory.model_detail', model_id=ag.model_id) }}">
+                    <strong>{{ ag.eq_name }}</strong>{% if ag.brand %} ({{ ag.brand }}){% endif %}
+                </a>
+                <div style="font-size:11px;color:var(--text-muted);">{{ ag.category_name }}</div>
+            </td>
+            <td>{{ ag.agreement_type }}</td>
+            <td>{{ ag.provider or '-' }}</td>
+            <td>{{ ag.start_date or '—' }} to {{ ag.end_date or 'No expiry' }}</td>
+            <td>
+                {% if ag.status == 'expired' %}
+                <span class="badge badge-red">Expired</span>
+                {% elif ag.status == 'expiring' %}
+                <span class="badge badge-yellow">Expiring Soon</span>
+                {% else %}
+                <span class="badge badge-green">Active</span>
+                {% endif %}
+            </td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ag.notes or '-' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}&type={{ type_filter }}&status={{ status_filter }}" class="btn btn-sm">&laquo; Prev</a>
+    {% endif %}
+    <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}&type={{ type_filter }}&status={{ status_filter }}" class="btn btn-sm">Next &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <i data-lucide="file-x"></i>
+    <p>No agreements found{% if type_filter or status_filter %} matching the selected filters{% endif %}.</p>
+</div>
+<script>lucide.createIcons();</script>
+{% endif %}
+{% endblock %}
