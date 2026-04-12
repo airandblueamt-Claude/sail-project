@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+sail.db
+backups/
+static/uploads/*
+!static/uploads/.gitkeep
+*.xlsx
+*.csv
+~$*
+.env
+.claude/
+.vscode/

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Browse Equipment{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Browse &amp; Book Equipment</h2>
+</div>
+
+<div class="info-banner">
+    <i data-lucide="info"></i>
+    <span>Find the equipment you need, click into it, then hit <strong>Book</strong> on an available unit.</span>
+</div>
+<script>lucide.createIcons();</script>
+
+<form class="filter-bar" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by name, brand, specs..." class="input" style="max-width:280px">
+    <select name="category" class="input" style="max-width:220px">
+        <option value="">All Categories</option>
+        {% for c in categories %}
+        <option value="{{ c.name }}" {% if cat == c.name %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary">Search</button>
+    {% if q or cat %}
+    <a href="{{ url_for('inventory.models') }}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+</form>
+
+{% if models %}
+<div class="equipment-grid">
+    {% for m in models %}
+    <a href="{{ url_for('inventory.model_detail', model_id=m.id) }}" class="equipment-card">
+        {% if m.image_path %}
+        <div class="eq-card-img">
+            <img src="{{ url_for('static', filename=m.image_path) }}" alt="{{ m.name }}">
+        </div>
+        {% else %}
+        <div class="eq-card-img eq-card-placeholder">
+            <i data-lucide="package"></i>
+        </div>
+        {% endif %}
+        <div class="eq-card-body">
+            <div class="eq-card-header">
+                <span class="badge badge-cat">{{ m.category_name }}</span>
+                {% if m.available_assets > 0 %}
+                <span class="badge badge-green">{{ m.available_assets }} available</span>
+                {% elif m.registered_assets > 0 %}
+                <span class="badge badge-yellow">All in use</span>
+                {% else %}
+                <span class="badge">Not yet registered</span>
+                {% endif %}
+            </div>
+            <h3 class="eq-card-name">{{ m.name }}</h3>
+            <p class="eq-card-brand">{{ m.brand }}</p>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page-1 }}&q={{ q }}&category={{ cat }}" class="btn btn-sm">&laquo; Prev</a>
+    {% endif %}
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="?page={{ page+1 }}&q={{ q }}&category={{ cat }}" class="btn btn-sm">Next &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <i data-lucide="search-x"></i>
+    <p>No equipment found{% if q %} matching "{{ q }}"{% endif %}.</p>
+</div>
+{% endif %}
+<script>lucide.createIcons();</script>
+{% endblock %}

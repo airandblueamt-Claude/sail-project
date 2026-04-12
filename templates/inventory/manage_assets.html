@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Manage Assets{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Manage Assets</h2>
+    <span class="badge">{{ assets|length }} registered</span>
+</div>
+
+<div class="info-banner">
+    <i data-lucide="info"></i>
+    <span>Each row is a physical unit with a unique asset tag. To add more: go to <strong>Browse Equipment</strong> &rarr; select a model &rarr; <strong>+ Register Asset</strong>.</span>
+</div>
+
+{% if assets %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Asset Tag</th>
+            <th>Equipment</th>
+            <th>Brand</th>
+            <th>Category</th>
+            <th>Serial</th>
+            <th>Location</th>
+            <th>Condition</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for a in assets %}
+        <tr>
+            <td><strong>{{ a.asset_tag }}</strong></td>
+            <td>{{ a.eq_name }}</td>
+            <td>{{ a.brand }}</td>
+            <td><span class="badge badge-cat">{{ a.category_name }}</span></td>
+            <td>{{ a.serial_number or '-' }}</td>
+            <td>{{ a.location_code or '-' }}</td>
+            <td><span class="badge badge-{{ a.condition }}">{{ a.condition }}</span></td>
+            <td><span class="badge badge-status-{{ a.status }}">{{ a.status|replace('_',' ') }}</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="hard-drive"></i>
+    <p>No individual assets registered yet.</p>
+    <p class="muted">Go to an equipment model and click "Register Asset" to add physical units.</p>
+    <a href="{{ url_for('inventory.models') }}" class="btn btn-primary" style="margin-top:12px">Browse Equipment Models</a>
+</div>
+<script>lucide.createIcons();</script>
+{% endif %}
+{% endblock %}

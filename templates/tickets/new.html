@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}SAIL - New Ticket{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('tickets.my_tickets') }}" class="breadcrumb">My Tickets</a>
+        <h2>New Ticket</h2>
+    </div>
+</div>
+
+<form method="post" class="form-card">
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Type *</label>
+            <select name="type" required class="input">
+                <option value="maintenance">Maintenance / Repair</option>
+                <option value="incident">Incident / Something Broken</option>
+                <option value="move">Move Request</option>
+                <option value="new_request">New Equipment Request</option>
+                <option value="decommission">Decommission</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Priority</label>
+            <select name="priority" class="input">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-row">
+        <label>Title *</label>
+        <input type="text" name="title" required class="input" placeholder="Brief summary of the issue or request">
+    </div>
+    <div class="form-row">
+        <label>Description</label>
+        <textarea name="description" rows="4" class="input" placeholder="Detailed description of what happened or what you need..."></textarea>
+    </div>
+    <div class="form-row">
+        <label>Related Asset (optional)</label>
+        <select name="asset_id" class="input">
+            <option value="">None / General Request</option>
+            {% for a in assets %}
+            <option value="{{ a.id }}">{{ a.asset_tag }} - {{ a.name }} ({{ a.brand }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Submit Ticket</button>
+        <a href="{{ url_for('tickets.my_tickets') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+</form>
+{% endblock %}

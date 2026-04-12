@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Booking Approvals{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Booking Approvals</h2>
+</div>
+
+<div class="info-banner">
+    <i data-lucide="info"></i>
+    <span>Booking workflow: <strong>Approve</strong> a pending request &rarr; <strong>Hand Over</strong> equipment to the employee &rarr; <strong>Receive Return</strong> when they bring it back.</span>
+</div>
+
+<div class="filter-bar">
+    <a href="{{ url_for('bookings.admin_queue') }}" class="btn btn-sm {% if not status_filter %}active{% endif %}">All</a>
+    <a href="?status=pending" class="btn btn-sm {% if status_filter == 'pending' %}active{% endif %}">Pending</a>
+    <a href="?status=approved" class="btn btn-sm {% if status_filter == 'approved' %}active{% endif %}">Approved</a>
+    <a href="?status=checked_out" class="btn btn-sm {% if status_filter == 'checked_out' %}active{% endif %}">Checked Out</a>
+    <a href="?status=returned" class="btn btn-sm {% if status_filter == 'returned' %}active{% endif %}">Returned</a>
+</div>
+
+{% if bookings %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Asset</th>
+            <th>Requester</th>
+            <th>Dates</th>
+            <th>Purpose</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for b in bookings %}
+        <tr>
+            <td><strong>{{ b.asset_tag }}</strong> &mdash; {{ b.eq_name }} ({{ b.brand }})</td>
+            <td>{{ b.requester_name }}</td>
+            <td>{{ b.booked_from }}<br>to {{ b.booked_to }}</td>
+            <td>{{ b.purpose or '-' }}</td>
+            <td><span class="badge badge-status-{{ b.status }}">{{ b.status|replace('_',' ') }}</span></td>
+            <td class="action-cell">
+                {% if b.status == 'pending' %}
+                <form method="post" action="{{ url_for('bookings.booking_action', booking_id=b.id) }}" style="display:inline">
+                    <input type="hidden" name="action" value="approve">
+                    <button class="btn btn-sm btn-green">Approve</button>
+                </form>
+                <form method="post" action="{{ url_for('bookings.booking_action', booking_id=b.id) }}" style="display:inline">
+                    <input type="hidden" name="action" value="reject">
+                    <button class="btn btn-sm btn-danger">Reject</button>
+                </form>
+                {% elif b.status == 'approved' %}
+                <form method="post" action="{{ url_for('bookings.booking_action', booking_id=b.id) }}" style="display:inline">
+                    <input type="hidden" name="action" value="checkout">
+                    <button class="btn btn-sm btn-primary">Hand Over</button>
+                </form>
+                {% elif b.status == 'checked_out' %}
+                <form method="post" action="{{ url_for('bookings.booking_action', booking_id=b.id) }}" style="display:inline">
+                    <input type="hidden" name="action" value="return">
+                    <input type="hidden" name="return_condition" value="good">
+                    <button class="btn btn-sm btn-green">Receive Return</button>
+                </form>
+                {% else %}
+                <span class="muted">Complete</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="check-circle"></i>
+    <p>No bookings{% if status_filter %} with status "{{ status_filter|replace('_',' ') }}"{% endif %}.</p>
+</div>
+<script>lucide.createIcons();</script>
+{% endif %}
+{% endblock %}

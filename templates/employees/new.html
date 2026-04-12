@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Add Employee{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('employees.list_employees') }}" class="breadcrumb">Employees</a>
+        <h2>Add Employee</h2>
+    </div>
+</div>
+
+<form method="post" class="form-card">
+    <div class="form-row">
+        <label>Full Name *</label>
+        <input type="text" name="name" required class="input" placeholder="e.g. Mohammed Al-Khalifa">
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Email *</label>
+            <input type="email" name="email" required class="input" placeholder="name@amt.com">
+        </div>
+        <div class="form-row">
+            <label>Role</label>
+            <select name="role" class="input">
+                <option value="employee">Employee</option>
+                <option value="technician">Technician</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+        <div class="form-row">
+            <label>Phone</label>
+            <input type="text" name="phone" class="input" placeholder="+971 ...">
+        </div>
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Department</label>
+            <select name="department_id" class="input">
+                <option value="">-- Select --</option>
+                {% for d in departments %}
+                <option value="{{ d.id }}">{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Or create new department</label>
+            <input type="text" name="department_new" class="input" placeholder="e.g. IT Operations">
+        </div>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Add Employee</button>
+        <a href="{{ url_for('employees.list_employees') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+</form>
+{% endblock %}

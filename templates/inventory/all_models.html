@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Full Inventory{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Full Inventory</h2>
+        <span class="badge">{{ total }} models</span>
+    </div>
+    <a href="{{ url_for('inventory.new_model') }}" class="btn btn-primary">+ Add Equipment Model</a>
+</div>
+
+<form class="filter-bar" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search..." class="input" style="max-width:220px">
+    <select name="category" class="input" style="max-width:200px">
+        <option value="">All Categories</option>
+        {% for c in categories %}
+        <option value="{{ c.name }}" {% if cat == c.name %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+    </select>
+    <select name="bookable" class="input" style="max-width:150px">
+        <option value="">All Types</option>
+        <option value="1" {% if bookable == '1' %}selected{% endif %}>Bookable</option>
+        <option value="0" {% if bookable == '0' %}selected{% endif %}>Infrastructure</option>
+    </select>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    {% if q or cat or bookable %}
+    <a href="{{ url_for('inventory.all_models') }}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+</form>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Category</th>
+            <th>Description</th>
+            <th>Brand</th>
+            <th class="num">Qty</th>
+            <th class="num">Registered</th>
+            <th>Type</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for m in models %}
+        <tr>
+            <td><span class="badge badge-cat">{{ m.category_name }}</span></td>
+            <td><a href="{{ url_for('inventory.model_detail', model_id=m.id) }}">{{ m.name }}</a></td>
+            <td>{{ m.brand }}</td>
+            <td class="num">{{ m.expected_qty or '-' }}</td>
+            <td class="num">{{ m.registered_assets }}</td>
+            <td>{% if m.is_bookable %}<span class="badge badge-green">Bookable</span>{% else %}<span class="muted">Infrastructure</span>{% endif %}</td>
+            <td>
+                <a href="{{ url_for('inventory.model_detail', model_id=m.id) }}" class="btn btn-sm">View</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page-1 }}&q={{ q }}&category={{ cat }}&bookable={{ bookable }}" class="btn btn-sm">&laquo; Prev</a>
+    {% endif %}
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="?page={{ page+1 }}&q={{ q }}&category={{ cat }}&bookable={{ bookable }}" class="btn btn-sm">Next &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Register Asset{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('inventory.models') }}" class="breadcrumb">Equipment</a>
+        <span class="breadcrumb-sep">/</span>
+        <a href="{{ url_for('inventory.model_detail', model_id=model.id) }}" class="breadcrumb">{{ model.name }}</a>
+        <h2>Register New Asset</h2>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h4>Equipment Model</h4>
+        <dl class="detail-list">
+            <dt>Name</dt><dd>{{ model.name }}</dd>
+            <dt>Brand</dt><dd>{{ model.brand }}</dd>
+            <dt>Category</dt><dd>{{ model.category_name }}</dd>
+            <dt>Expected Qty</dt><dd>{{ model.expected_qty or '-' }}</dd>
+        </dl>
+    </div>
+
+    <form method="post" class="form-card">
+        <h4>Asset Details</h4>
+        <div class="form-row">
+            <label>Asset Tag *</label>
+            <input type="text" name="asset_tag" value="{{ suggested_tag }}" required class="input">
+        </div>
+        <div class="form-row">
+            <label>Serial Number</label>
+            <input type="text" name="serial_number" class="input" placeholder="Manufacturer serial number">
+        </div>
+        <div class="form-row">
+            <label>Location</label>
+            <select name="location_id" class="input">
+                <option value="">-- Not Set --</option>
+                {% for l in locations %}
+                <option value="{{ l.id }}">{{ l.code }}{% if l.label %} ({{ l.label }}){% endif %}</option>
+                {% endfor %}
+            </select>
+            <p class="muted" style="margin-top:4px">No location listed? Add one below.</p>
+        </div>
+        <div class="form-row">
+            <label>Condition</label>
+            <select name="condition" class="input">
+                <option value="good">Good</option>
+                <option value="fair">Fair</option>
+                <option value="damaged">Damaged</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Notes</label>
+            <textarea name="notes" rows="2" class="input" placeholder="Any additional notes..."></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Register Asset</button>
+            <a href="{{ url_for('inventory.model_detail', model_id=model.id) }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<!-- ── Quick add location ─────────────────────────────────────────────── -->
+<div class="section" style="max-width:720px">
+    <h3>Add a Location</h3>
+    <form method="post" action="{{ url_for('inventory.add_location') }}" class="filter-bar">
+        <input type="text" name="code" class="input" placeholder="Code (e.g. W-1300)" style="max-width:180px" required>
+        <input type="text" name="label" class="input" placeholder="Label (e.g. Main Lab)" style="max-width:220px">
+        <button type="submit" class="btn btn-primary">Add Location</button>
+    </form>
+</div>
+{% endblock %}

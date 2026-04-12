@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SAIL{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo-wrap">
+                <img src="{{ url_for('static', filename='amt-logo.png') }}" alt="AMT" class="logo-img">
+            </div>
+            <span class="logo-sub">SAIL &mdash; Asset Inventory &amp; Logistics</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('dashboard.index') }}" class="{% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+                <i data-lucide="layout-dashboard"></i> Dashboard
+            </a></li>
+            <li><a href="{{ url_for('inventory.models') }}" class="{% if request.endpoint == 'inventory.models' %}active{% endif %}">
+                <i data-lucide="search"></i> Browse &amp; Book
+            </a></li>
+            <li><a href="{{ url_for('bookings.my_bookings') }}" class="{% if request.endpoint == 'bookings.my_bookings' %}active{% endif %}">
+                <i data-lucide="calendar-check"></i> My Bookings
+            </a></li>
+            <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if request.endpoint == 'tickets.my_tickets' %}active{% endif %}">
+                <i data-lucide="ticket"></i> My Tickets
+            </a></li>
+            <li><a href="{{ url_for('help.guide') }}" class="{% if request.blueprint == 'help' %}active{% endif %}">
+                <i data-lucide="help-circle"></i> How It Works
+            </a></li>
+
+            {% if current_user and current_user.role in ('admin', 'manager') %}
+            <li class="nav-divider"><span>Administration</span></li>
+            <li><a href="{{ url_for('bookings.admin_queue') }}" class="{% if request.endpoint == 'bookings.admin_queue' %}active{% endif %}">
+                <i data-lucide="clipboard-check"></i> Booking Approvals
+            </a></li>
+            <li><a href="{{ url_for('tickets.list_tickets') }}" class="{% if request.endpoint == 'tickets.list_tickets' %}active{% endif %}">
+                <i data-lucide="list-checks"></i> All Tickets
+            </a></li>
+            <li><a href="{{ url_for('inventory.all_models') }}" class="{% if request.endpoint == 'inventory.all_models' %}active{% endif %}">
+                <i data-lucide="package"></i> Full Inventory
+            </a></li>
+            <li><a href="{{ url_for('inventory.manage_assets') }}" class="{% if request.endpoint == 'inventory.manage_assets' %}active{% endif %}">
+                <i data-lucide="hard-drive"></i> Manage Assets
+            </a></li>
+            <li><a href="{{ url_for('employees.list_employees') }}" class="{% if request.blueprint == 'employees' %}active{% endif %}">
+                <i data-lucide="users"></i> Employees
+            </a></li>
+            {% endif %}
+        </ul>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i data-lucide="user-circle"></i>
+                <div>
+                    <span class="user-name">{{ current_user.name }}</span>
+                    <span class="user-role">{{ current_user.role }}</span>
+                </div>
+            </div>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                    <i data-lucide="sun"></i>
+                    <i data-lucide="moon"></i>
+                </button>
+                <a href="{{ url_for('logout') }}" class="btn-logout" title="Sign out">
+                    <i data-lucide="log-out"></i>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        lucide.createIcons();
+        function toggleTheme() {
+            const html = document.documentElement;
+            const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('sail-theme', next);
+        }
+        (function() {
+            const saved = localStorage.getItem('sail-theme');
+            if (saved) document.documentElement.setAttribute('data-theme', saved);
+        })();
+    </script>
+</body>
+</html>

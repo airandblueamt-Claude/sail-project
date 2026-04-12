@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Edit {{ model.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('inventory.models') }}" class="breadcrumb">Inventory</a>
+        <span class="breadcrumb-sep">/</span>
+        <a href="{{ url_for('inventory.model_detail', model_id=model.id) }}" class="breadcrumb">{{ model.name }}</a>
+        <h2>Edit Equipment Model</h2>
+    </div>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="form-card">
+    <div class="form-row">
+        <label>Name</label>
+        <input type="text" name="name" value="{{ model.name }}" required class="input">
+    </div>
+    <div class="form-row">
+        <label>Category</label>
+        <select name="category_id" class="input">
+            {% for c in categories %}
+            <option value="{{ c.id }}" {% if c.id == model.category_id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Brand</label>
+            <input type="text" name="brand" value="{{ model.brand or '' }}" class="input">
+        </div>
+        <div class="form-row">
+            <label>Model Number</label>
+            <input type="text" name="model_number" value="{{ model.model_number or '' }}" class="input">
+        </div>
+    </div>
+    <div class="form-row">
+        <label>Specifications</label>
+        <textarea name="specifications" rows="3" class="input">{{ model.specifications or '' }}</textarea>
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Expected Qty</label>
+            <input type="number" name="expected_qty" value="{{ model.expected_qty or '' }}" class="input">
+        </div>
+        <div class="form-row">
+            <label>Unit</label>
+            <input type="text" name="unit" value="{{ model.unit or 'EA' }}" class="input">
+        </div>
+    </div>
+    <div class="form-row">
+        <label>Equipment Photo</label>
+        {% if model.image_path %}
+        <div class="current-image">
+            <img src="{{ url_for('static', filename=model.image_path) }}" alt="{{ model.name }}">
+            <p class="muted">Current image — upload a new one to replace it.</p>
+        </div>
+        {% endif %}
+        <input type="file" name="image" accept="image/*" class="input">
+    </div>
+    <div class="form-row">
+        <label class="checkbox-label">
+            <input type="checkbox" name="is_bookable" value="1" {% if model.is_bookable %}checked{% endif %}>
+            Bookable (can be reserved by employees)
+        </label>
+    </div>
+    <div class="form-row">
+        <label>Notes</label>
+        <textarea name="notes" rows="2" class="input">{{ model.notes or '' }}</textarea>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="{{ url_for('inventory.model_detail', model_id=model.id) }}" class="btn btn-ghost">Cancel</a>
+    </div>
+</form>
+{% endblock %}

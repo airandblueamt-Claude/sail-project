@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Tickets{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Tickets</h2>
+    <a href="{{ url_for('tickets.new_ticket') }}" class="btn btn-primary">New Ticket</a>
+</div>
+
+<div class="info-banner">
+    <i data-lucide="info"></i>
+    <span>Click a ticket to view details, assign it to someone, update status, or add comments. Use <strong>Internal</strong> notes for tech-only discussions.</span>
+</div>
+
+<div class="filter-bar">
+    <a href="{{ url_for('tickets.list_tickets') }}" class="btn btn-sm {% if not status and not ttype %}active{% endif %}">All</a>
+    <a href="?status=open" class="btn btn-sm {% if status == 'open' %}active{% endif %}">Open</a>
+    <a href="?status=in_progress" class="btn btn-sm {% if status == 'in_progress' %}active{% endif %}">In Progress</a>
+    <a href="?status=waiting" class="btn btn-sm {% if status == 'waiting' %}active{% endif %}">Waiting</a>
+    <a href="?status=resolved" class="btn btn-sm {% if status == 'resolved' %}active{% endif %}">Resolved</a>
+    <span class="filter-sep">|</span>
+    <a href="?type=maintenance" class="btn btn-sm {% if ttype == 'maintenance' %}active{% endif %}">Maintenance</a>
+    <a href="?type=incident" class="btn btn-sm {% if ttype == 'incident' %}active{% endif %}">Incident</a>
+    <a href="?type=move" class="btn btn-sm {% if ttype == 'move' %}active{% endif %}">Move</a>
+    <a href="?type=new_request" class="btn btn-sm {% if ttype == 'new_request' %}active{% endif %}">New Request</a>
+</div>
+
+{% if tickets %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Ticket</th>
+            <th>Type</th>
+            <th>Priority</th>
+            <th>Title</th>
+            <th>Asset</th>
+            <th>Submitted By</th>
+            <th>Assigned To</th>
+            <th>Status</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in tickets %}
+        <tr>
+            <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}"><strong>{{ t.ticket_number }}</strong></a></td>
+            <td><span class="badge badge-type-{{ t.type }}">{{ t.type }}</span></td>
+            <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority }}</span></td>
+            <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.title }}</a></td>
+            <td>{% if t.asset_tag %}{{ t.asset_tag }}{% else %}-{% endif %}</td>
+            <td>{{ t.submitter_name }}</td>
+            <td>{{ t.assignee_name or 'Unassigned' }}</td>
+            <td><span class="badge badge-status-{{ t.status }}">{{ t.status }}</span></td>
+            <td>{{ t.created_at[:10] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="check-circle"></i>
+    <p>No tickets{% if status %} with status "{{ status }}"{% endif %}{% if ttype %} of type "{{ ttype }}"{% endif %}.</p>
+</div>
+<script>lucide.createIcons();</script>
+{% endif %}
+{% endblock %}

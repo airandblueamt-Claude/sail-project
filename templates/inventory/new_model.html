@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Add Equipment{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('inventory.models') }}" class="breadcrumb">Equipment</a>
+        <h2>Add New Equipment Model</h2>
+    </div>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="form-card">
+    <div class="form-row">
+        <label>Name *</label>
+        <input type="text" name="name" required class="input" placeholder="e.g. Laptop, Projector, Smart Board">
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Category</label>
+            <select name="category_id" class="input">
+                <option value="">-- Select --</option>
+                {% for c in categories %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Or create new category</label>
+            <input type="text" name="category_new" class="input" placeholder="e.g. Mobile Devices">
+        </div>
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Brand</label>
+            <input type="text" name="brand" class="input" placeholder="e.g. Dell, Lenovo, LG">
+        </div>
+        <div class="form-row">
+            <label>Model Number</label>
+            <input type="text" name="model_number" class="input" placeholder="e.g. ThinkPad P17 Gen 2">
+        </div>
+    </div>
+    <div class="form-row">
+        <label>Specifications</label>
+        <textarea name="specifications" rows="3" class="input" placeholder="Technical specs, included accessories, etc."></textarea>
+    </div>
+    <div class="form-row-group">
+        <div class="form-row">
+            <label>Expected Quantity</label>
+            <input type="number" name="expected_qty" class="input" placeholder="How many units?">
+        </div>
+        <div class="form-row">
+            <label>Unit</label>
+            <input type="text" name="unit" value="EA" class="input">
+        </div>
+    </div>
+    <div class="form-row">
+        <label>Equipment Photo</label>
+        <input type="file" name="image" accept="image/*" class="input">
+        <p class="muted">Upload a photo of this equipment type (PNG, JPG, WebP).</p>
+    </div>
+    <div class="form-row">
+        <label class="checkbox-label">
+            <input type="checkbox" name="is_bookable" value="1">
+            Bookable (employees can reserve this equipment)
+        </label>
+    </div>
+    <div class="form-row">
+        <label>Notes</label>
+        <textarea name="notes" rows="2" class="input" placeholder="Any additional notes..."></textarea>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Add Equipment Model</button>
+        <a href="{{ url_for('inventory.models') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+</form>
+{% endblock %}

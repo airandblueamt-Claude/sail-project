@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAIL - Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-page">
+    <div class="auth-card">
+        <div class="auth-header">
+            <img src="{{ url_for('static', filename='amt-logo.png') }}" alt="AMT" class="auth-logo">
+            <h1>SAIL</h1>
+            <p class="muted">Smart Asset Inventory & Logistics</p>
+        </div>
+
+        {% if error %}
+        <div class="flash flash-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post">
+            <div class="form-row">
+                <label>Email</label>
+                <input type="email" name="email" class="input" placeholder="name@amt.com" required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+        </form>
+
+        <p class="auth-footer">Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
+    </div>
+    <script>
+        const saved = localStorage.getItem('sail-theme');
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
+    </script>
+</body>
+</html>

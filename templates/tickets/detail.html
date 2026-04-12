@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}SAIL - {{ ticket.ticket_number }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('tickets.list_tickets') }}" class="breadcrumb">Tickets</a>
+        <h2>{{ ticket.ticket_number }} — {{ ticket.title }}</h2>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h4>Ticket Info</h4>
+        <dl class="detail-list">
+            <dt>Type</dt><dd><span class="badge badge-type-{{ ticket.type }}">{{ ticket.type }}</span></dd>
+            <dt>Priority</dt><dd><span class="badge badge-priority-{{ ticket.priority }}">{{ ticket.priority }}</span></dd>
+            <dt>Status</dt><dd><span class="badge badge-status-{{ ticket.status }}">{{ ticket.status }}</span></dd>
+            <dt>Submitted By</dt><dd>{{ ticket.submitter_name }}</dd>
+            <dt>Assigned To</dt><dd>{{ ticket.assignee_name or 'Unassigned' }}</dd>
+            {% if ticket.asset_tag %}
+            <dt>Asset</dt><dd>{{ ticket.asset_tag }} — {{ ticket.equipment_name }}</dd>
+            {% endif %}
+            <dt>Created</dt><dd>{{ ticket.created_at }}</dd>
+            {% if ticket.resolved_at %}<dt>Resolved</dt><dd>{{ ticket.resolved_at }}</dd>{% endif %}
+        </dl>
+    </div>
+    <div class="detail-card">
+        <h4>Description</h4>
+        <p class="specs-text">{{ ticket.description or 'No description.' }}</p>
+        {% if ticket.resolution %}
+        <h4>Resolution</h4>
+        <p class="specs-text">{{ ticket.resolution }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Update ticket -->
+<div class="section">
+    <h3>Update Ticket</h3>
+    <form method="post" action="{{ url_for('tickets.update_ticket', ticket_id=ticket.id) }}" class="form-card">
+        <div class="form-row-group">
+            <div class="form-row">
+                <label>Status</label>
+                <select name="status" class="input">
+                    {% for s in ['open','in_progress','waiting','resolved','closed'] %}
+                    <option value="{{ s }}" {% if ticket.status == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Priority</label>
+                <select name="priority" class="input">
+                    {% for p in ['low','medium','high','critical'] %}
+                    <option value="{{ p }}" {% if ticket.priority == p %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Assign To</label>
+                <select name="assigned_to" class="input">
+                    <option value="">Unassigned</option>
+                    {% for e in employees %}
+                    <option value="{{ e.id }}" {% if ticket.assigned_to == e.id %}selected{% endif %}>{{ e.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <label>Resolution Notes</label>
+            <textarea name="resolution" rows="2" class="input">{{ ticket.resolution or '' }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Update</button>
+        </div>
+    </form>
+</div>
+
+<!-- Comments -->
+<div class="section">
+    <h3>Comments ({{ comments|length }})</h3>
+    {% for c in comments %}
+    <div class="comment {% if c.is_internal %}comment-internal{% endif %}">
+        <div class="comment-header">
+            <strong>{{ c.author_name }}</strong>
+            <span class="muted">{{ c.created_at }}</span>
+            {% if c.is_internal %}<span class="badge badge-yellow">Internal</span>{% endif %}
+        </div>
+        <p>{{ c.body }}</p>
+    </div>
+    {% endfor %}
+
+    <form method="post" action="{{ url_for('tickets.add_comment', ticket_id=ticket.id) }}" class="comment-form">
+        <div class="form-row">
+            <textarea name="body" required rows="2" class="input" placeholder="Add a comment..."></textarea>
+        </div>
+        <div class="form-row">
+            {% if current_user.role in ('admin', 'manager', 'technician') %}
+            <label class="checkbox-label">
+                <input type="checkbox" name="is_internal" value="1"> Internal note (tech-only)
+            </label>
+            {% endif %}
+            <button type="submit" class="btn btn-sm btn-primary">Post as {{ current_user.name }}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
