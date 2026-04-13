@@ -4,65 +4,87 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SAIL (Smart Asset Inventory & Logistics) is a dual-application system for IT asset management at AMT. It consists of two independent Flask apps:
+SAIL (Smart Asset Inventory & Logistics) is a single Flask app for IT asset management at AMT. It handles an equipment catalog, individual asset tracking, a reserve→approve→checkout→return booking flow, and a ticketing system (maintenance, moves, new-equipment requests, incidents).
 
-- **AssetInventory** (`C:/Users/m.alkhalifa/AssetInventory/`) — Main CRUD app for managing assets, bookings, employees, and audit trails. Runs on port **5000**.
-- **AssetAnalytics** (`C:/Users/m.alkhalifa/AssetAnalytics/`) — Standalone upload-and-analyze tool for Excel/CSV asset data with Chart.js visualizations. Runs on port **5001**.
+The entire app lives in this directory — there is no separate analytics/inventory split.
 
-The `sail-project/` directory itself holds reference data (the master Excel equipment list).
-
-## Running the Apps
+## Running the App
 
 ```bash
-# AssetInventory
-python C:/Users/m.alkhalifa/AssetInventory/app.py
-# → http://localhost:5000
-
-# AssetAnalytics
-python C:/Users/m.alkhalifa/AssetAnalytics/app.py
-# → http://localhost:5001
+pip install -r requirements.txt   # flask, openpyxl
+python init_db.py                 # creates sail.db from schema.sql + imports equipment_clean.csv
+python app.py                     # serves http://localhost:5555
 ```
 
-Dependencies: Flask, openpyxl (no requirements.txt exists — install manually via pip).
+- First-time admin: register via `/register`, then flip your role with
+  `UPDATE employees SET role='admin' WHERE email='…'` against `sail.db`.
+- Email notifications need `SAIL_SMTP_PASSWORD` (Gmail app password) in the env; without it the app runs fine but silently skips sending.
+- `python backup_db.py` — timestamped copy in `backups/`, keeps the last 10.
+
+There is no test suite, linter, or build step configured.
 
 ## Architecture
 
-### AssetInventory
+### Flask app factory + blueprints
 
-Flask app factory pattern in `app.py` → registers 6 blueprints:
+`app.py` defines `create_app()` and owns auth (login/register/logout) directly. Everything else is a blueprint registered from `routes/`:
 
-| Blueprint | Prefix | File | Purpose |
-|-----------|--------|------|---------|
-| `dashboard_bp` | `/` | `routes/dashboard.py` | Landing page with stats |
-| `assets_bp` | `/assets` | `routes/assets.py` | Asset browsing & detail |
-| `bookings_bp` | `/bookings` | `routes/bookings.py` | Booking lifecycle (create → approve → checkout → return) |
-| `employees_bp` | `/employees` | `routes/employees.py` | Employee CRUD (admin only) |
-| `admin_bp` | `/admin` | `routes/admin.py` | Admin panel, audit log, CSV export |
-| `api_bp` | `/api` | `routes/api.py` | REST endpoints for AJAX calls |
+| Blueprint | Prefix | Purpose |
+|-----------|--------|---------|
+| `dashboard_bp` | `/` | Role-aware landing stats |
+| `inventory_bp` | `/inventory` | Employee browse of bookable equipment + admin full-inventory CRUD + photo uploads |
+| `bookings_bp` | `/bookings` | Booking lifecycle + admin approvals |
+| `tickets_bp` | `/tickets` | Tickets with comments, priority, assignment |
+| `employees_bp` | `/employees` | Employee management (admin) |
+| `reports_bp` | `/reports` | Admin-only weekly/monthly rollups for inventory & tickets, with CSV export |
+| `help_bp` | `/help` | In-app guide |
 
-**Database:** SQLite with WAL mode, foreign keys enabled. Schema is in `database.py` (inline SQL). Tables: `categories`, `locations`, `employees`, `assets`, `bookings`, `audit_log`. The `get_db()` context manager handles connection lifecycle with auto-commit/rollback.
+Auth is session-based, **email-only** (no password). `before_request` loads the user from `session['user_id']` into `g.user` and redirects unauthenticated requests to `/login` except for `login`, `register`, and `static`.
 
-**Auth:** Session-based login by badge number or employee name (no password). User loaded into `g.user` via `before_request`. Admin vs employee role check gates certain routes.
+### Data model — the core distinction
 
-**Data import:** `import_csv.py` imports from AppSheet-exported CSV, normalizing categories (see `CATEGORY_FIXES` in `config.py`) and locations.
+The schema draws a hard line between product lines and physical units:
 
-**Config:** `config.py` defines `DB_PATH`, `UPLOAD_FOLDER`, `PAGE_SIZE`, `BOOKABLE_CATEGORIES` (only IT equipment is bookable, not furniture), and `SECRET_KEY`.
+- **`equipment_models`** = one row per product line (e.g. "30 Lenovo Workstations"). Carries brand, specs, `expected_qty`, `is_bookable`, and the shared photo path.
+- **`assets`** = individual physical units with their own `asset_tag` (`SAIL-0001`), serial, location, `condition`, and `status`. `qty_represented > 1` lets one asset row stand for a bulk lot that isn't worth tagging individually.
+- **Bookings attach to `assets`, not models.** The browse UI lists models filtered by `is_bookable = 1`, then the user picks a specific asset to reserve.
 
-### AssetAnalytics
+Note: `is_bookable` is a **per-model column**, not a category whitelist. Any older reference to a `BOOKABLE_CATEGORIES` config constant is stale — that mechanism no longer exists.
 
-Single-file Flask app (`app.py`). No database — uses in-memory `DATASETS` dict keyed by session ID. Pipeline: upload → parse (Excel via openpyxl or CSV) → configure column mapping → dashboard with analytics. Supports CRUD on the in-memory dataset and CSV export.
+Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comments`, `equipment_agreements` (warranty/license/support), and `audit_log`.
+
+### Database access pattern
+
+`database.py` exposes a single `get_db()` context manager — SQLite with `PRAGMA foreign_keys=ON` and WAL mode, auto-commit on success, rollback on exception. **Always** use it as `with get_db() as conn:`; don't open raw connections. Mutations should call `log_audit(conn, table, record_id, action, …)` in the same transaction so history lands in `audit_log` atomically.
+
+### Status/enum values (enforced by CHECK constraints)
+
+- `employees.role`: `admin` / `manager` / `technician` / `employee`
+- `assets.condition`: `good` / `fair` / `damaged` / `decommissioned`
+- `assets.status`: `available` / `in_use` / `reserved` / `checked_out` / `maintenance` / `decommissioned`
+- `bookings.status`: `pending` → `approved` → `checked_out` → `returned` (also `cancelled`, `rejected`)
+- `tickets.type`: `maintenance` / `move` / `new_request` / `incident` / `decommission` / `other`
+- `tickets.priority`: `low` / `medium` / `high` / `critical`
+- `tickets.status`: `open` / `in_progress` / `waiting` / `resolved` / `closed`
+
+Changing any of these means editing `schema.sql` **and** the form/template values — SQLite will reject non-matching inserts silently-looking but fatally.
+
+### Email
+
+`email_service.py` wraps Gmail SMTP with helpers like `notify_registration`, booking status notifications, and ticket updates. Config lives in `config.py` (`ADMIN_EMAIL`, `SMTP_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `APP_URL`); the password comes from `SAIL_SMTP_PASSWORD`.
 
 ### Frontend
 
-Both apps use Jinja2 templates with a shared design language: custom CSS with light/dark theme (CSS variables, persisted in localStorage), Lucide icons, and Chart.js for visualizations. No frontend build step — all static assets served directly.
+Jinja2 templates in `templates/`, one shared `static/style.css` driving a custom design system with CSS-variable-based light/dark theme (persisted in localStorage). Lucide icons, Chart.js for dashboard charts. No build step.
 
-### Branding
+Branding: both `static/amt-logo.png` and `static/amt-logo-white.png` are the red AMT logo on transparent; the sidebar's `.logo-wrap` switches its background per theme. Use the logo, not text.
 
-AMT logo files are in `static/`: `amt-logo.png` (red logo on transparent, for light backgrounds) and `amt-logo-white.png` (same logo — both are red on transparent). The sidebar wraps the logo in a `.logo-wrap` container that switches background: white in light theme, dark in dark theme. Always use the AMT logo for branding, not text logos.
+### Data import / export scripts
 
-## Key Business Rules
+- `clean_equipment.py` — turns the raw `SAIL Equipment List (AMT_SCOPE).xlsx` into `equipment_clean.csv` (merges continuation rows, fixes category names).
+- `init_db.py` — runs `schema.sql`, then imports `equipment_clean.csv` into `equipment_models`.
+- `export_clean.py` — dumps the DB back to a formatted Excel workbook.
 
-- Only categories in `BOOKABLE_CATEGORIES` (config.py) can be booked — these are IT equipment types, not furniture
-- Booking status workflow: `pending` → `approved` → `checked_out` → `returned`
-- All data mutations in AssetInventory are tracked in the `audit_log` table
-- Asset conditions: `good`, `fair`, `damaged`, `decommissioned`
+## Design docs
+
+`docs/superpowers/specs/` holds design specs; `docs/superpowers/plans/` holds implementation plans (one file per feature, dated). Check these before starting significant new features — recent work: `equipment_agreements` and the ticket kanban/SLA board.

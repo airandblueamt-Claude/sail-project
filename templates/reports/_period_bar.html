@@ -1,0 +1,26 @@
+{# Period selector: week/month + end-date picker + CSV export.
+   Callers pass endpoint=<blueprint.route> and current period, end_d. #}
+<div class="section" style="padding:12px 16px;">
+    <form method="get" action="{{ url_for(request.endpoint) }}" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div>
+            <label style="display:block;font-size:0.8rem;color:var(--text-muted);">Period</label>
+            <select name="period" onchange="this.form.submit()">
+                <option value="week" {% if period == 'week' %}selected{% endif %}>Last 7 days</option>
+                <option value="month" {% if period == 'month' %}selected{% endif %}>Last 30 days</option>
+            </select>
+        </div>
+        <div>
+            <label style="display:block;font-size:0.8rem;color:var(--text-muted);">End date</label>
+            <input type="date" name="end" value="{{ end_d.isoformat() }}">
+        </div>
+        <button class="btn btn-sm" type="submit">Apply</button>
+        <div style="margin-left:auto;">
+            <a class="btn btn-sm" href="{{ url_for(request.endpoint, period=period, end=end_d.isoformat(), format='csv') }}">
+                <i data-lucide="download"></i> Export CSV
+            </a>
+        </div>
+    </form>
+    <p style="margin:8px 0 0;font-size:0.85rem;color:var(--text-muted);">
+        Showing activity from <strong>{{ start }}</strong> through <strong>{{ end_d.isoformat() }}</strong>.
+    </p>
+</div>

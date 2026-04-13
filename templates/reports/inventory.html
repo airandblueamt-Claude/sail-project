@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Inventory Report{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Inventory Report</h2>
+    <div class="page-header-actions">
+        <a href="{{ url_for('reports.tickets', period=period, end=end_d.isoformat()) }}" class="btn btn-sm">
+            <i data-lucide="ticket"></i> Ticket Report
+        </a>
+        <a href="{{ url_for('reports.export_all_xlsx') }}" class="btn btn-sm btn-green">
+            <i data-lucide="file-spreadsheet"></i> Export All Data (Excel)
+        </a>
+    </div>
+</div>
+
+{% include 'reports/_period_bar.html' with context %}
+
+<!-- ── Current snapshot ────────────────────────────────────────────── -->
+<div class="section">
+    <h3>Current Status</h3>
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i data-lucide="package"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.assets }}</span><span class="stat-label">Total Assets</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i data-lucide="package-check"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.available }}</span><span class="stat-label">Available</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i data-lucide="log-out"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.checked_out }}</span><span class="stat-label">Checked Out</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon orange"><i data-lucide="wrench"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.maintenance }}</span><span class="stat-label">In Maintenance</span></div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h3>By Status</h3>
+    <table class="data-table">
+        <thead><tr><th>Status</th><th class="num">Assets</th></tr></thead>
+        <tbody>
+            {% for r in status_breakdown %}
+            <tr><td><span class="badge badge-status-{{ r.status }}">{{ r.status|replace('_',' ') }}</span></td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="section">
+    <h3>By Condition</h3>
+    <table class="data-table">
+        <thead><tr><th>Condition</th><th class="num">Assets</th></tr></thead>
+        <tbody>
+            {% for r in condition_breakdown %}
+            <tr><td>{{ r.condition }}</td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="section">
+    <h3>By Category</h3>
+    <table class="data-table">
+        <thead><tr><th>Category</th><th class="num">Assets</th></tr></thead>
+        <tbody>
+            {% for r in category_breakdown %}
+            <tr><td>{{ r.category }}</td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- ── History for the period ──────────────────────────────────────── -->
+<div class="section">
+    <h3>Activity in Period</h3>
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i data-lucide="plus-circle"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.new_assets }}</span><span class="stat-label">New Assets Registered</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon purple"><i data-lucide="calendar-plus"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.bookings_created }}</span><span class="stat-label">Bookings Created</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i data-lucide="log-out"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.checkouts }}</span><span class="stat-label">Checkouts</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i data-lucide="log-in"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.returns }}</span><span class="stat-label">Returns</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon red"><i data-lucide="x-circle"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.rejected }}</span><span class="stat-label">Rejected</span></div>
+        </div>
+    </div>
+</div>
+
+{% if top_models %}
+<div class="section">
+    <h3>Most-Booked Equipment (in period)</h3>
+    <table class="data-table">
+        <thead><tr><th>Equipment</th><th>Category</th><th class="num">Bookings</th></tr></thead>
+        <tbody>
+            {% for r in top_models %}
+            <tr>
+                <td><strong>{{ r.eq_name }}</strong>{% if r.brand %} <span style="color:var(--text-muted)">({{ r.brand }})</span>{% endif %}</td>
+                <td>{{ r.category }}</td>
+                <td class="num">{{ r.bookings }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if recent_bookings %}
+<div class="section">
+    <h3>Bookings Created in Period</h3>
+    <table class="data-table">
+        <thead><tr><th>Asset</th><th>Equipment</th><th>Requester</th><th>Dates</th><th>Status</th><th>Created</th></tr></thead>
+        <tbody>
+            {% for b in recent_bookings %}
+            <tr>
+                <td><strong>{{ b.asset_tag }}</strong></td>
+                <td>{{ b.eq_name }}{% if b.brand %} ({{ b.brand }}){% endif %}</td>
+                <td>{{ b.requester_name }}</td>
+                <td>{{ b.booked_from }} &rarr; {{ b.booked_to }}</td>
+                <td><span class="badge badge-status-{{ b.status }}">{{ b.status|replace('_',' ') }}</span></td>
+                <td>{{ b.created_at[:10] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if agreements_expired or agreements_expiring %}
+<div class="section">
+    <h3>Agreements</h3>
+    {% if agreements_expired %}
+    <h4 style="margin:12px 0 6px;color:var(--danger,#d33)">Expired</h4>
+    <table class="data-table">
+        <thead><tr><th>Equipment</th><th>Type</th><th>Provider</th><th>End Date</th></tr></thead>
+        <tbody>
+            {% for a in agreements_expired %}
+            <tr>
+                <td>{{ a.eq_name }}{% if a.brand %} ({{ a.brand }}){% endif %}</td>
+                <td>{{ a.agreement_type }}</td>
+                <td>{{ a.provider or '—' }}</td>
+                <td>{{ a.end_date }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% if agreements_expiring %}
+    <h4 style="margin:12px 0 6px;">Expiring within 30 days</h4>
+    <table class="data-table">
+        <thead><tr><th>Equipment</th><th>Type</th><th>Provider</th><th>End Date</th></tr></thead>
+        <tbody>
+            {% for a in agreements_expiring %}
+            <tr>
+                <td>{{ a.eq_name }}{% if a.brand %} ({{ a.brand }}){% endif %}</td>
+                <td>{{ a.agreement_type }}</td>
+                <td>{{ a.provider or '—' }}</td>
+                <td>{{ a.end_date }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endif %}
+
+<script>lucide.createIcons();</script>
+{% endblock %}

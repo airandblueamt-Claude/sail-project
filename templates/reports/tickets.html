@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Ticket Report{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Ticket Report</h2>
+    <div class="page-header-actions">
+        <a href="{{ url_for('reports.inventory', period=period, end=end_d.isoformat()) }}" class="btn btn-sm">
+            <i data-lucide="package"></i> Inventory Report
+        </a>
+        <a href="{{ url_for('reports.export_all_xlsx') }}" class="btn btn-sm btn-green">
+            <i data-lucide="file-spreadsheet"></i> Export All Data (Excel)
+        </a>
+    </div>
+</div>
+
+{% include 'reports/_period_bar.html' with context %}
+
+<!-- ── Current snapshot ────────────────────────────────────────────── -->
+<div class="section">
+    <h3>Current Status</h3>
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i data-lucide="ticket"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.all_tickets }}</span><span class="stat-label">All Tickets</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i data-lucide="inbox"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.open }}</span><span class="stat-label">Open / In Progress</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon orange"><i data-lucide="user-x"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.unassigned_open }}</span><span class="stat-label">Unassigned</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon red"><i data-lucide="alert-triangle"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.critical_open }}</span><span class="stat-label">Critical Open</span></div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h3>By Status</h3>
+    <table class="data-table">
+        <thead><tr><th>Status</th><th class="num">Tickets</th></tr></thead>
+        <tbody>
+            {% for r in status_breakdown %}
+            <tr><td>{{ r.status|replace('_',' ') }}</td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="section">
+    <h3>By Type (all time)</h3>
+    <table class="data-table">
+        <thead><tr><th>Type</th><th class="num">Tickets</th></tr></thead>
+        <tbody>
+            {% for r in type_breakdown %}
+            <tr><td>{{ r.type|replace('_',' ') }}</td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if priority_breakdown %}
+<div class="section">
+    <h3>Open Tickets by Priority</h3>
+    <table class="data-table">
+        <thead><tr><th>Priority</th><th class="num">Tickets</th></tr></thead>
+        <tbody>
+            {% for r in priority_breakdown %}
+            <tr><td>{{ r.priority }}</td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- ── History for the period ──────────────────────────────────────── -->
+<div class="section">
+    <h3>Activity in Period</h3>
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i data-lucide="plus-circle"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.created }}</span><span class="stat-label">Created</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i data-lucide="check-circle-2"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.resolved }}</span><span class="stat-label">Resolved</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon purple"><i data-lucide="archive"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ history.closed }}</span><span class="stat-label">Closed</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i data-lucide="clock"></i></div>
+            <div class="stat-body">
+                <span class="stat-value">{% if history.avg_resolution_hours %}{{ history.avg_resolution_hours }}h{% else %}—{% endif %}</span>
+                <span class="stat-label">Avg Resolution</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if created_by_type %}
+<div class="section">
+    <h3>Created in Period by Type</h3>
+    <table class="data-table">
+        <thead><tr><th>Type</th><th class="num">Tickets</th></tr></thead>
+        <tbody>
+            {% for r in created_by_type %}
+            <tr><td>{{ r.type|replace('_',' ') }}</td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if created_by_priority %}
+<div class="section">
+    <h3>Created in Period by Priority</h3>
+    <table class="data-table">
+        <thead><tr><th>Priority</th><th class="num">Tickets</th></tr></thead>
+        <tbody>
+            {% for r in created_by_priority %}
+            <tr><td>{{ r.priority }}</td><td class="num">{{ r.n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if top_assignees %}
+<div class="section">
+    <h3>Technician Activity</h3>
+    <table class="data-table">
+        <thead><tr><th>Assignee</th><th class="num">Resolved in Period</th><th class="num">Open Now</th></tr></thead>
+        <tbody>
+            {% for r in top_assignees %}
+            <tr><td>{{ r.assignee }}</td><td class="num">{{ r.resolved }}</td><td class="num">{{ r.open_now }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if aging_backlog %}
+<div class="section">
+    <h3>Aging Backlog (open before period start)</h3>
+    <table class="data-table">
+        <thead><tr><th>Ticket</th><th>Title</th><th>Type</th><th>Priority</th><th>Assignee</th><th class="num">Age (days)</th></tr></thead>
+        <tbody>
+            {% for t in aging_backlog %}
+            <tr>
+                <td><strong>{{ t.ticket_number }}</strong></td>
+                <td>{{ t.title }}</td>
+                <td>{{ t.type|replace('_',' ') }}</td>
+                <td>{{ t.priority }}</td>
+                <td>{{ t.assignee or '—' }}</td>
+                <td class="num">{{ t.age_days }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if recent_tickets %}
+<div class="section">
+    <h3>Tickets Created in Period</h3>
+    <table class="data-table">
+        <thead><tr><th>Ticket</th><th>Title</th><th>Type</th><th>Priority</th><th>Status</th><th>Submitter</th><th>Assignee</th><th>Created</th></tr></thead>
+        <tbody>
+            {% for t in recent_tickets %}
+            <tr>
+                <td><strong>{{ t.ticket_number }}</strong></td>
+                <td>{{ t.title }}</td>
+                <td>{{ t.type|replace('_',' ') }}</td>
+                <td>{{ t.priority }}</td>
+                <td>{{ t.status|replace('_',' ') }}</td>
+                <td>{{ t.submitter }}</td>
+                <td>{{ t.assignee or '—' }}</td>
+                <td>{{ t.created_at[:10] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<script>lucide.createIcons();</script>
+{% endblock %}
