@@ -2,7 +2,6 @@
 from flask import Flask, session, g, redirect, url_for, request, render_template, flash
 from database import get_db
 from config import SECRET_KEY, UPLOAD_FOLDER
-from email_service import notify_registration
 import os
 
 
@@ -29,8 +28,8 @@ def create_app():
                 else:
                     session.clear()
 
-        # Allow login/register/static without auth
-        public = ('login', 'register', 'static')
+        # Allow login/static without auth
+        public = ('login', 'static')
         if not g.user and request.endpoint and request.endpoint not in public:
             return redirect(url_for('login'))
 
@@ -38,75 +37,64 @@ def create_app():
     def inject_user():
         return dict(current_user=g.user)
 
-    # ── Login ────────────────────────────────────────────────────────
+    # ── Login (email + password) ────────────────────────────────────
     @app.route('/login', methods=['GET', 'POST'])
     def login():
+        from werkzeug.security import check_password_hash
         if g.user:
             return redirect(url_for('dashboard.index'))
         error = None
         if request.method == 'POST':
             email = request.form.get('email', '').strip()
-            if not email:
-                error = 'Please enter your email.'
+            password = request.form.get('password', '')
+            if not email or not password:
+                error = 'Email and password are required.'
             else:
                 with get_db() as conn:
                     user = conn.execute(
                         "SELECT * FROM employees WHERE LOWER(email) = LOWER(?) AND is_active = 1",
                         (email,)).fetchone()
-                if user:
+                if user and user['password_hash'] and check_password_hash(user['password_hash'], password):
                     session['user_id'] = user['id']
                     return redirect(url_for('dashboard.index'))
-                else:
-                    error = 'Email not found. Please register first.'
+                error = 'Invalid credentials.'
         return render_template('login.html', error=error)
-
-    # ── Register ─────────────────────────────────────────────────────
-    @app.route('/register', methods=['GET', 'POST'])
-    def register():
-        if g.user:
-            return redirect(url_for('dashboard.index'))
-        error = None
-        if request.method == 'POST':
-            name = request.form.get('name', '').strip()
-            email = request.form.get('email', '').strip()
-            phone = request.form.get('phone', '').strip() or None
-            dept_new = request.form.get('department', '').strip()
-
-            if not name or not email:
-                error = 'Name and email are required.'
-            else:
-                with get_db() as conn:
-                    existing = conn.execute(
-                        "SELECT id FROM employees WHERE LOWER(email) = LOWER(?)",
-                        (email,)).fetchone()
-                    if existing:
-                        error = f'{email} is already registered. Try signing in.'
-                    else:
-                        dept_id = None
-                        if dept_new:
-                            conn.execute(
-                                "INSERT OR IGNORE INTO departments (name) VALUES (?)",
-                                (dept_new,))
-                            dept_id = conn.execute(
-                                "SELECT id FROM departments WHERE name = ?",
-                                (dept_new,)).fetchone()['id']
-
-                        cur = conn.execute(
-                            "INSERT INTO employees (name, email, phone, "
-                            "department_id, role) VALUES (?, ?, ?, ?, 'employee')",
-                            (name, email, phone, dept_id))
-                        session['user_id'] = cur.lastrowid
-                        notify_registration(name, email)
-                        flash(f'Welcome, {name}! Your account has been created.', 'success')
-                        return redirect(url_for('dashboard.index'))
-
-        return render_template('register.html', error=error)
 
     # ── Logout ───────────────────────────────────────────────────────
     @app.route('/logout')
     def logout():
         session.clear()
         return redirect(url_for('login'))
+
+    # ── Password change (self-service) ──────────────────────────────
+    @app.route('/account/password', methods=['GET', 'POST'])
+    def change_password():
+        from werkzeug.security import check_password_hash, generate_password_hash
+        error = None
+        if request.method == 'POST':
+            current = request.form.get('current_password', '')
+            new1 = request.form.get('new_password', '')
+            new2 = request.form.get('confirm_password', '')
+            if not current or not new1 or not new2:
+                error = 'All fields are required.'
+            elif new1 != new2:
+                error = 'New passwords do not match.'
+            elif len(new1) < 8:
+                error = 'New password must be at least 8 characters.'
+            else:
+                with get_db() as conn:
+                    row = conn.execute(
+                        "SELECT password_hash FROM employees WHERE id = ?",
+                        (g.user['id'],)).fetchone()
+                    if not row or not row['password_hash'] or not check_password_hash(row['password_hash'], current):
+                        error = 'Current password is incorrect.'
+                    else:
+                        conn.execute(
+                            "UPDATE employees SET password_hash = ? WHERE id = ?",
+                            (generate_password_hash(new1), g.user['id']))
+                        flash('Password updated.', 'success')
+                        return redirect(url_for('dashboard.index'))
+        return render_template('account/password.html', error=error)
 
     # ── Blueprints ───────────────────────────────────────────────────
     from routes.dashboard import dashboard_bp
