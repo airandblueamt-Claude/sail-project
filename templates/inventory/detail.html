@@ -16,7 +16,11 @@
 
 <div class="detail-grid">
     <div class="detail-card">
-        {% if model.image_path %}
+        {% if model.image_path and model.image_path.startswith('http') %}
+        <div class="model-image">
+            <img src="{{ model.image_path }}" alt="{{ model.name }}">
+        </div>
+        {% elif model.image_path %}
         <div class="model-image">
             <img src="{{ url_for('static', filename=model.image_path) }}" alt="{{ model.name }}">
         </div>

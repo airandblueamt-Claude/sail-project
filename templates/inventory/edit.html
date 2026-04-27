@@ -49,7 +49,12 @@
     </div>
     <div class="form-row">
         <label>Equipment Photo</label>
-        {% if model.image_path %}
+        {% if model.image_path and model.image_path.startswith('http') %}
+        <div class="current-image">
+            <img src="{{ model.image_path }}" alt="{{ model.name }}">
+            <p class="muted">Current image (external URL — upload a new file to replace it).</p>
+        </div>
+        {% elif model.image_path %}
         <div class="current-image">
             <img src="{{ url_for('static', filename=model.image_path) }}" alt="{{ model.name }}">
             <p class="muted">Current image — upload a new one to replace it.</p>
