@@ -1,0 +1,30 @@
+# Fly.io configuration for SAIL.
+# Edit `app` and `primary_region` for your deployment, then `fly launch --copy-config`.
+
+app = "sail-asset-tracker"
+primary_region = "fra"  # pick from `fly platform regions` — fra/dxb/sin etc.
+
+[build]
+
+[env]
+  SAIL_HOST = "0.0.0.0"
+  SAIL_DATA_DIR = "/data"
+  SAIL_DB_PATH = "/data/sail.db"
+  # SAIL_APP_URL is overridden per-deploy with `fly secrets set` once the URL is known.
+
+[[mounts]]
+  source = "sail_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

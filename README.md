@@ -15,12 +15,12 @@ python app.py                # serves http://127.0.0.1:5555
 
 | Name | Email | Password |
 |------|-------|----------|
-| Mohammed Al-Khalifa | airandblueamt@gmail.com | Aramco@123 |
-| Ahmed Al-Rashidi | ahmed.alrashidi@amt.sa | Aramco@123 |
-| Sara Al-Mutairi | sara.almutairi@amt.sa | Aramco@123 |
-| Khalid Al-Dosari | khalid.aldosari@amt.sa | Aramco@123 |
+| Mohammad Khalifa | airandblueamt@gmail.com | Aramco@123 |
+| M. Shaikh | m.shaikh@amt-arabia.net | Aramco@123 |
+| Omar Bawadod | omar.bawadod@aramco.com | Aramco@123 |
+| Ali Almatrood | ali.almatrood@aramco.com | Aramco@123 |
 
-All four accounts have role `admin` and will be prompted to change their password on first login. New users are added via **Employees → + Add Employee** (no public registration).
+All four accounts have role `admin`. The seed password is intentionally weak so the team can log in immediately — change yours at `/account/password` after first login. New users are added via **Employees → + Add Employee** (no public registration).
 
 ## Environment Variables
 
@@ -31,6 +31,63 @@ All four accounts have role `admin` and will be prompted to change their passwor
 | `SAIL_DEBUG` | `0` | Set to `1` to enable Flask debug mode |
 | `SAIL_HOST` | `127.0.0.1` | Bind address; set to `0.0.0.0` to expose to LAN |
 | `SAIL_PORT` | `5555` | Port to listen on |
+| `SAIL_DB_PATH` | `./sail.db` | Where to keep the SQLite file (point at a mounted volume in prod) |
+| `SAIL_DATA_DIR` | `./` | Used by the Docker entrypoint as the parent for the uploads symlink |
+| `SAIL_APP_URL` | `http://localhost:5555` | Used in outbound email templates |
+
+## Deploying to Fly.io
+
+Free-tier Fly.io is a good fit for this app — it gives you persistent volumes (so `sail.db` survives restarts) and HTTPS out of the box. Files in the repo:
+
+- `Dockerfile` — Python 3.12-slim image
+- `entrypoint.sh` — symlinks `static/uploads` → the persistent volume, runs `init_db.py` + `import_assets_v3.py` if the DB doesn't exist yet, then starts gunicorn on port 8080
+- `fly.toml` — app name, region, volume mount, HTTP service config
+- `wsgi.py` — gunicorn entrypoint (`wsgi:app`)
+
+One-time setup:
+
+```bash
+# 1. Install flyctl and sign in.
+curl -L https://fly.io/install.sh | sh
+fly auth signup       # or: fly auth login
+
+# 2. Edit fly.toml — pick a unique app name and a region near you.
+#    `fly platform regions` lists options (e.g. fra, dxb, sin, iad, lhr).
+
+# 3. Create the app and the persistent volume.
+fly apps create <your-app-name>
+fly volumes create sail_data --region <your-region> --size 1
+
+# 4. Set production secrets.
+fly secrets set \
+    SAIL_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')" \
+    SAIL_SMTP_PASSWORD="<gmail-app-password>" \
+    SAIL_APP_URL="https://<your-app-name>.fly.dev"
+
+# 5. Deploy.
+fly deploy
+```
+
+The first boot runs `init_db.py + import_assets_v3.py` automatically because the volume is empty. Subsequent deploys keep the data — they just restart gunicorn.
+
+Useful commands:
+
+```bash
+fly logs              # tail app logs
+fly ssh console       # shell into the running container
+fly status            # health + restart count
+fly secrets list      # see which env vars are set (values not shown)
+fly volumes list      # confirm sail_data exists and is mounted
+```
+
+If you ever need to wipe and re-seed:
+
+```bash
+fly ssh console
+> rm /data/sail.db        # next restart will rebuild
+> exit
+fly machine restart
+```
 
 ## Project Layout
 

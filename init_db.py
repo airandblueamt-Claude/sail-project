@@ -11,9 +11,9 @@ After running this, run import_assets_v3.py to load the inventory data.
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash
+from config import DB_PATH
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "sail.db")
 SCHEMA_PATH = os.path.join(BASE_DIR, "schema.sql")
 
 CONTROL_TEAM = [
