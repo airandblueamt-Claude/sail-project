@@ -19,7 +19,6 @@ def main():
     header_fill = PatternFill(start_color="2D3142", end_color="2D3142", fill_type="solid")
     cat_font = Font(bold=True, size=11, color="1A1D2E")
     cat_fill = PatternFill(start_color="E2E4EC", end_color="E2E4EC", fill_type="solid")
-    bookable_fill = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
     flag_fill = PatternFill(start_color="FFFBEB", end_color="FFFBEB", fill_type="solid")
     thin_border = Border(
         bottom=Side(style="thin", color="E2E4EC")
@@ -29,8 +28,8 @@ def main():
 
     # ── Headers ──────────────────────────────────────────────────────
     headers = ["#", "Category", "Description", "Brand", "Model / Specs",
-               "Qty", "Unit", "Bookable", "Review Flag", "Notes"]
-    col_widths = [5, 25, 45, 20, 55, 8, 8, 10, 16, 40]
+               "Qty", "Unit", "Review Flag", "Notes"]
+    col_widths = [5, 25, 45, 20, 55, 8, 8, 16, 40]
 
     for col, (h, w) in enumerate(zip(headers, col_widths), 1):
         cell = ws.cell(row=1, column=col, value=h)
@@ -41,14 +40,14 @@ def main():
 
     ws.row_dimensions[1].height = 24
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:J1"
+    ws.auto_filter.ref = f"A1:I1"
 
     # ── Data ─────────────────────────────────────────────────────────
     with get_db() as conn:
         rows = conn.execute("""
             SELECT em.id, c.name as category, em.name as description,
                    em.brand, em.specifications, em.unit, em.expected_qty,
-                   em.is_bookable, em.notes
+                   em.notes
             FROM equipment_models em
             JOIN categories c ON em.category_id = c.id
             ORDER BY c.name, em.name
@@ -95,7 +94,6 @@ def main():
             specs,
             r['expected_qty'],
             r['unit'] or 'EA',
-            'Yes' if r['is_bookable'] else '',
             flag,
             clean_notes,
         ]
@@ -103,13 +101,10 @@ def main():
         for col, val in enumerate(values, 1):
             cell = ws.cell(row=row_num, column=col, value=val)
             cell.border = thin_border
-            cell.alignment = wrap if col in (5, 10) else (center if col in (1, 6, 7, 8) else Alignment(vertical="top"))
+            cell.alignment = wrap if col in (5, 9) else (center if col in (1, 6, 7) else Alignment(vertical="top"))
 
-            # Highlight bookable rows
-            if r['is_bookable'] and col not in (1,):
-                cell.fill = bookable_fill
             # Highlight flagged rows
-            if flag and col == 9:
+            if flag and col == 8:
                 cell.fill = flag_fill
                 cell.font = Font(bold=True, color="B45309")
 

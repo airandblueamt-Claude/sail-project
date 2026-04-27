@@ -63,12 +63,6 @@
         <input type="file" name="image" accept="image/*" class="input">
     </div>
     <div class="form-row">
-        <label class="checkbox-label">
-            <input type="checkbox" name="is_bookable" value="1" {% if model.is_bookable %}checked{% endif %}>
-            Bookable (can be reserved by employees)
-        </label>
-    </div>
-    <div class="form-row">
         <label>Notes</label>
         <textarea name="notes" rows="2" class="input">{{ model.notes or '' }}</textarea>
     </div>

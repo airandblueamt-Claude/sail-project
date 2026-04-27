@@ -34,7 +34,7 @@ def models():
     page = max(1, request.args.get('page', 1, type=int))
 
     with get_db() as conn:
-        where = ["em.is_bookable = 1"]
+        where = []
         params = []
 
         if q:
@@ -44,7 +44,7 @@ def models():
             where.append("c.name = ?")
             params.append(cat)
 
-        where_sql = " WHERE " + " AND ".join(where)
+        where_sql = " WHERE " + " AND ".join(where) if where else ""
 
         total = conn.execute(
             f"SELECT COUNT(*) FROM equipment_models em "
@@ -64,8 +64,7 @@ def models():
 
         categories = conn.execute(
             "SELECT DISTINCT c.name FROM equipment_models em "
-            "JOIN categories c ON em.category_id = c.id "
-            "WHERE em.is_bookable = 1 ORDER BY c.name"
+            "JOIN categories c ON em.category_id = c.id ORDER BY c.name"
         ).fetchall()
 
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -221,7 +220,6 @@ def all_models():
 
     q = request.args.get('q', '').strip()
     cat = request.args.get('category', '')
-    bookable = request.args.get('bookable', '')
     page = max(1, request.args.get('page', 1, type=int))
 
     with get_db() as conn:
@@ -234,10 +232,6 @@ def all_models():
         if cat:
             where.append("c.name = ?")
             params.append(cat)
-        if bookable == '1':
-            where.append("em.is_bookable = 1")
-        elif bookable == '0':
-            where.append("em.is_bookable = 0")
 
         where_sql = " WHERE " + " AND ".join(where) if where else ""
 
@@ -266,7 +260,7 @@ def all_models():
     return render_template('inventory/all_models.html',
                            models=rows, categories=categories,
                            total=total, page=page, total_pages=total_pages,
-                           q=q, cat=cat, bookable=bookable)
+                           q=q, cat=cat)
 
 
 @inventory_bp.route('/new', methods=['GET', 'POST'])
@@ -296,8 +290,8 @@ def new_model():
             cur = conn.execute("""
                 INSERT INTO equipment_models
                     (category_id, name, brand, model_number, specifications,
-                     unit, expected_qty, is_bookable, notes, image_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     unit, expected_qty, notes, image_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 cat_id, name,
                 request.form.get('brand', '').strip(),
@@ -305,7 +299,6 @@ def new_model():
                 request.form.get('specifications', '').strip(),
                 request.form.get('unit', 'EA'),
                 request.form.get('expected_qty', type=int),
-                1 if request.form.get('is_bookable') else 0,
                 request.form.get('notes', '').strip(),
                 image_path,
             ))
@@ -345,7 +338,6 @@ def edit_model(model_id):
                 request.form['model_number'], request.form['specifications'],
                 request.form['category_id'],
                 request.form.get('expected_qty', type=int),
-                1 if request.form.get('is_bookable') else 0,
                 request.form['notes'], request.form.get('unit', 'EA'),
             ]
             if image_path:
@@ -353,7 +345,7 @@ def edit_model(model_id):
             conn.execute(f"""
                 UPDATE equipment_models
                 SET name=?, brand=?, model_number=?, specifications=?,
-                    category_id=?, expected_qty=?, is_bookable=?, notes=?, unit=?
+                    category_id=?, expected_qty=?, notes=?, unit=?
                     {image_update}
                 WHERE id=?""",
                 params + [model_id])

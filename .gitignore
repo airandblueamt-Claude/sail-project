@@ -11,3 +11,7 @@ static/uploads/*
 .env
 .claude/
 .vscode/
+
+# Built docs (regenerate from markdown sources)
+docs/superpowers/specs/*.pdf
+docs/superpowers/plans/*.pdf

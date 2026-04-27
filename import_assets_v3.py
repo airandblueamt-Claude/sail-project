@@ -28,9 +28,6 @@ DEFAULT_XLSX = os.path.join(
 )
 SHEET_NAME = "IT Assets"
 
-# Category names that should NOT default to bookable=1 (fixed installations).
-NON_BOOKABLE_CATEGORIES = {"Access Control", "Smart Podium", "Eye Tracking System"}
-
 # Holder values that mean "in the SAIL inventory pool" (status = available).
 STORAGE_POOL_HOLDERS = {"SAIL", "SAIL Storage", "-"}
 
@@ -170,11 +167,6 @@ def location_for(raw_label):
     code = location_code(label)
     is_storage = 1 if label.upper() == "STORAGE" else 0
     return (code, label, is_storage)
-
-
-def is_bookable_for(category):
-    """Default bookability flag for a derived equipment_model."""
-    return 0 if category in NON_BOOKABLE_CATEGORIES else 1
 
 
 def build_notes(row):
@@ -350,9 +342,6 @@ def print_summary(plan):
     models = plan["models"]
     assets = plan["assets"]
     sc = plan["status_counter"]
-    bookable = sum(
-        1 for (cat, _) in models.keys() if is_bookable_for(cat)
-    )
 
     print("SUMMARY")
     print(f"  Categories:        {len(cats)}")
@@ -363,7 +352,6 @@ def print_summary(plan):
                "reserved", "checked_out", "maintenance"):
         if sc.get(st):
             print(f"    {st + ':':<16} {sc[st]}")
-    print(f"  Bookable models:   {bookable} of {len(models)}")
     print("DATA QUALITY")
     print(f"  Rows w/o Product_ID:        {plan['no_pid']}   (assigned SAIL-ROW-{{excel_row}})")
     print(f"  Rows w/ duplicate PID:      {plan['dup_pid_rows']}   (suffixed with -R{{excel_row}})")
@@ -381,7 +369,7 @@ def write_to_db(plan):
     context manager rolls back so the DB is unchanged.
     """
     with get_db() as conn:
-        # 1. Wipe in FK-safe order. Bookings/tickets are empty (verified in spec).
+        # 1. Wipe in FK-safe order.
         conn.execute("DELETE FROM assets")
         conn.execute("DELETE FROM equipment_models")
         conn.execute("DELETE FROM locations")
@@ -414,14 +402,13 @@ def write_to_db(plan):
         for key, m in plan["models"].items():
             cur = conn.execute(
                 """INSERT INTO equipment_models
-                       (category_id, name, specifications, image_path, is_bookable)
-                   VALUES (?, ?, ?, ?, ?)""",
+                       (category_id, name, specifications, image_path)
+                   VALUES (?, ?, ?, ?)""",
                 (
                     cat_ids[m["category"]],
                     m["name"],
                     m["description"],
                     m["image"],
-                    is_bookable_for(m["category"]),
                 ),
             )
             model_ids[key] = cur.lastrowid

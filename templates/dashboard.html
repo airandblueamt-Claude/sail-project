@@ -5,32 +5,8 @@
     <h2>Welcome, {{ current_user.name }}</h2>
 </div>
 
-{% if stats.total_assets == 0 and is_admin %}
-<div class="info-banner info-banner-accent">
-    <i data-lucide="rocket"></i>
-    <div>
-        <strong>Getting Started</strong>
-        <p style="margin:4px 0 0">To set up the system: <strong>Browse Equipment</strong> &rarr; pick a model &rarr; <strong>+ Register Asset</strong> to add physical units. Then employees can start booking. <a href="{{ url_for('help.guide') }}">Read the full guide</a></p>
-    </div>
-</div>
-{% endif %}
-
 <!-- ── Employee quick stats ──────────────────────────────────────────── -->
 <div class="stat-grid">
-    <div class="stat-card">
-        <div class="stat-icon blue"><i data-lucide="calendar-check"></i></div>
-        <div class="stat-body">
-            <span class="stat-value">{{ stats.my_active }}</span>
-            <span class="stat-label">My Active Bookings</span>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon yellow"><i data-lucide="clock"></i></div>
-        <div class="stat-body">
-            <span class="stat-value">{{ stats.my_pending }}</span>
-            <span class="stat-label">Awaiting Approval</span>
-        </div>
-    </div>
     <div class="stat-card">
         <div class="stat-icon green"><i data-lucide="package-check"></i></div>
         <div class="stat-body">
@@ -49,40 +25,15 @@
 
 <!-- ── Quick actions ─────────────────────────────────────────────────── -->
 <div class="quick-actions">
-    <a href="{{ url_for('inventory.models') }}" class="action-card">
-        <i data-lucide="search"></i>
-        <span>Browse &amp; Book Equipment</span>
-    </a>
-    <a href="{{ url_for('bookings.my_bookings') }}" class="action-card">
-        <i data-lucide="calendar"></i>
-        <span>View My Bookings</span>
-    </a>
     <a href="{{ url_for('tickets.new_ticket') }}" class="action-card">
         <i data-lucide="plus-circle"></i>
         <span>Report an Issue</span>
     </a>
+    <a href="{{ url_for('tickets.my_tickets') }}" class="action-card">
+        <i data-lucide="ticket"></i>
+        <span>My Tickets</span>
+    </a>
 </div>
-
-<!-- ── My current equipment ──────────────────────────────────────────── -->
-{% if my_checkouts %}
-<div class="section">
-    <h3>My Current Equipment</h3>
-    <table class="data-table">
-        <thead><tr><th>Asset</th><th>Equipment</th><th>From</th><th>Until</th><th>Status</th></tr></thead>
-        <tbody>
-            {% for b in my_checkouts %}
-            <tr>
-                <td><strong>{{ b.asset_tag }}</strong></td>
-                <td>{{ b.eq_name }} ({{ b.brand }})</td>
-                <td>{{ b.booked_from }}</td>
-                <td>{{ b.booked_to }}</td>
-                <td><span class="badge badge-status-{{ b.status }}">{{ b.status|replace('_',' ') }}</span></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
 
 <!-- ── Admin section ─────────────────────────────────────────────────── -->
 {% if is_admin %}
@@ -91,13 +42,6 @@
         <h3>Admin Overview</h3>
     </div>
     <div class="stat-grid">
-        <div class="stat-card accent">
-            <div class="stat-icon red"><i data-lucide="alert-circle"></i></div>
-            <div class="stat-body">
-                <span class="stat-value">{{ admin_stats.pending_bookings }}</span>
-                <span class="stat-label">Pending Approvals</span>
-            </div>
-        </div>
         <div class="stat-card accent">
             <div class="stat-icon yellow"><i data-lucide="ticket"></i></div>
             <div class="stat-body">
@@ -134,37 +78,6 @@
     </div>
 </div>
 <script>lucide.createIcons();</script>
-{% endif %}
-
-{% if pending_approvals %}
-<div class="section">
-    <div class="section-header">
-        <h3>Pending Booking Approvals</h3>
-        <a href="{{ url_for('bookings.admin_queue') }}" class="btn btn-sm">View All</a>
-    </div>
-    <table class="data-table">
-        <thead><tr><th>Asset</th><th>Requested By</th><th>Dates</th><th>Actions</th></tr></thead>
-        <tbody>
-            {% for b in pending_approvals %}
-            <tr>
-                <td><strong>{{ b.asset_tag }}</strong> — {{ b.eq_name }}</td>
-                <td>{{ b.requester_name }}</td>
-                <td>{{ b.booked_from }} to {{ b.booked_to }}</td>
-                <td class="action-cell">
-                    <form method="post" action="{{ url_for('bookings.booking_action', booking_id=b.id) }}" style="display:inline">
-                        <input type="hidden" name="action" value="approve">
-                        <button class="btn btn-sm btn-green">Approve</button>
-                    </form>
-                    <form method="post" action="{{ url_for('bookings.booking_action', booking_id=b.id) }}" style="display:inline">
-                        <input type="hidden" name="action" value="reject">
-                        <button class="btn btn-sm btn-danger">Reject</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
 {% endif %}
 {% endif %}
 

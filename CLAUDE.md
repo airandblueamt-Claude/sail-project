@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SAIL (Smart Asset Inventory & Logistics) is a single Flask app for IT asset management at AMT. It handles an equipment catalog, individual asset tracking, a reserve→approve→checkout→return booking flow, and a ticketing system (maintenance, moves, new-equipment requests, incidents).
+SAIL (Smart Asset Inventory & Logistics) is a single Flask app for IT asset management at AMT. It handles an equipment catalog, individual asset tracking, and a ticketing system (maintenance, moves, new-equipment requests, incidents).
+
+The booking module (reserve→approve→checkout→return) has been deliberately removed. The only remaining workflow for users is submitting and tracking tickets. Admins manage equipment, assets, and tickets.
 
 The entire app lives in this directory — there is no separate analytics/inventory split.
 
@@ -33,26 +35,23 @@ There is no test suite, linter, or build step configured.
 | Blueprint | Prefix | Purpose |
 |-----------|--------|---------|
 | `dashboard_bp` | `/` | Role-aware landing stats |
-| `inventory_bp` | `/inventory` | Employee browse of bookable equipment + admin full-inventory CRUD + photo uploads |
-| `bookings_bp` | `/bookings` | Booking lifecycle + admin approvals |
+| `inventory_bp` | `/inventory` | Equipment model browser + admin full-inventory CRUD + photo uploads |
 | `tickets_bp` | `/tickets` | Tickets with comments, priority, assignment |
 | `employees_bp` | `/employees` | Employee management (admin) |
 | `reports_bp` | `/reports` | Admin-only weekly/monthly rollups for inventory & tickets, with CSV export |
 | `help_bp` | `/help` | In-app guide |
 
-Auth is session-based, **email-only** (no password). `before_request` loads the user from `session['user_id']` into `g.user` and redirects unauthenticated requests to `/login` except for `login`, `register`, and `static`.
+Auth is session-based (email + password). `before_request` loads the user from `session['user_id']` into `g.user` and redirects unauthenticated requests to `/login` except for `login`, `register`, and `static`.
 
 ### Data model — the core distinction
 
 The schema draws a hard line between product lines and physical units:
 
-- **`equipment_models`** = one row per product line (e.g. "30 Lenovo Workstations"). Carries brand, specs, `expected_qty`, `is_bookable`, and the shared photo path.
+- **`equipment_models`** = one row per product line (e.g. "30 Lenovo Workstations"). Carries brand, specs, `expected_qty`, and the shared photo path.
 - **`assets`** = individual physical units with their own `asset_tag` (`SAIL-0001`), serial, location, `condition`, and `status`. `qty_represented > 1` lets one asset row stand for a bulk lot that isn't worth tagging individually.
-- **Bookings attach to `assets`, not models.** The browse UI lists models filtered by `is_bookable = 1`, then the user picks a specific asset to reserve.
+- **Tickets attach to `assets`** (optionally). The ticket system is the primary user-facing workflow.
 
-Note: `is_bookable` is a **per-model column**, not a category whitelist. Any older reference to a `BOOKABLE_CATEGORIES` config constant is stale — that mechanism no longer exists.
-
-Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comments`, `equipment_agreements` (warranty/license/support), and `audit_log`.
+Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comments`, `equipment_agreements` (warranty/license/support), `issue_categories`, and `audit_log`.
 
 ### Database access pattern
 
@@ -63,7 +62,6 @@ Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comm
 - `employees.role`: `admin` / `manager` / `technician` / `employee`
 - `assets.condition`: `good` / `fair` / `damaged` / `decommissioned`
 - `assets.status`: `available` / `in_use` / `reserved` / `checked_out` / `maintenance` / `decommissioned`
-- `bookings.status`: `pending` → `approved` → `checked_out` → `returned` (also `cancelled`, `rejected`)
 - `tickets.type`: `maintenance` / `move` / `new_request` / `incident` / `decommission` / `other`
 - `tickets.priority`: `low` / `medium` / `high` / `critical`
 - `tickets.status`: `open` / `in_progress` / `waiting` / `resolved` / `closed`
@@ -72,7 +70,7 @@ Changing any of these means editing `schema.sql` **and** the form/template value
 
 ### Email
 
-`email_service.py` wraps Gmail SMTP with helpers like `notify_registration`, booking status notifications, and ticket updates. Config lives in `config.py` (`ADMIN_EMAIL`, `SMTP_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `APP_URL`); the password comes from `SAIL_SMTP_PASSWORD`.
+`email_service.py` wraps Gmail SMTP with helpers like `notify_registration`, and ticket notifications (`notify_ticket_created`, `notify_ticket_update`). Config lives in `config.py` (`ADMIN_EMAIL`, `SMTP_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `APP_URL`); the password comes from `SAIL_SMTP_PASSWORD`.
 
 ### Frontend
 

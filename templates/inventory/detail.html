@@ -32,7 +32,6 @@
             <dt>Model</dt><dd>{{ model.model_number or '-' }}</dd>
             <dt>Unit</dt><dd>{{ model.unit }}</dd>
             <dt>Expected Qty</dt><dd>{{ model.expected_qty or '-' }}</dd>
-            <dt>Bookable</dt><dd>{% if model.is_bookable %}<span class="badge badge-green">Yes</span>{% else %}No{% endif %}</dd>
         </dl>
     </div>
     <div class="detail-card">
@@ -74,9 +73,7 @@
                 <td><span class="badge badge-status-{{ a.status }}">{{ a.status|replace('_',' ') }}</span></td>
                 <td>{{ a.assigned_to_name or '-' }}</td>
                 <td>
-                    {% if bookings_enabled and model.is_bookable and a.status == 'available' %}
-                    <a href="{{ url_for('bookings.book_asset', asset_id=a.id) }}" class="btn btn-sm btn-primary">Book</a>
-                    {% elif a.status != 'available' %}
+                    {% if a.status != 'available' %}
                     <span class="muted">{{ a.status|replace('_',' ') }}</span>
                     {% endif %}
                 </td>

@@ -34,9 +34,8 @@ def create_app():
             return redirect(url_for('login'))
 
     @app.context_processor
-    def inject_globals():
-        from config import BOOKINGS_ENABLED
-        return dict(current_user=g.user, bookings_enabled=BOOKINGS_ENABLED)
+    def inject_user():
+        return dict(current_user=g.user)
 
     # ── Login (email + password) ────────────────────────────────────
     @app.route('/login', methods=['GET', 'POST'])
@@ -100,7 +99,6 @@ def create_app():
     # ── Blueprints ───────────────────────────────────────────────────
     from routes.dashboard import dashboard_bp
     from routes.inventory import inventory_bp
-    from routes.bookings import bookings_bp
     from routes.tickets import tickets_bp
     from routes.employees import employees_bp
     from routes.help import help_bp
@@ -109,7 +107,6 @@ def create_app():
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(inventory_bp, url_prefix='/inventory')
-    app.register_blueprint(bookings_bp, url_prefix='/bookings')
     app.register_blueprint(tickets_bp, url_prefix='/tickets')
     app.register_blueprint(employees_bp, url_prefix='/employees')
     app.register_blueprint(help_bp, url_prefix='/help')

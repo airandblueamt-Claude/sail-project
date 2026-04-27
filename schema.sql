@@ -6,11 +6,9 @@
 -- Key design decisions:
 --   - equipment_models = the "product line" (one row per CSV line: 30 Lenovo
 --     Workstations is one model).  assets = individual physical units that
---     get asset tags, serial numbers, locations, and bookings.
+--     get asset tags, serial numbers, and locations.
 --   - Tickets cover maintenance requests, move requests, new-equipment
 --     requests, and incident reports — all in one table with a type column.
---   - Bookings mirror the room-reservation pattern: request → approve →
---     check-out → return.
 -- ============================================================================
 
 PRAGMA foreign_keys = ON;
@@ -70,7 +68,6 @@ CREATE TABLE IF NOT EXISTS equipment_models (
     specifications  TEXT,                          -- merged specs from continuation rows
     unit            TEXT DEFAULT 'EA',             -- EA, LOT, Item
     expected_qty    INTEGER,                       -- qty from the equipment list (for tracking)
-    is_bookable     INTEGER DEFAULT 0,             -- can individual units be reserved?
     image_path      TEXT,                          -- shared photo: local file under static/, or external http(s) URL
     notes           TEXT,
     created_at      TEXT DEFAULT (datetime('now'))
@@ -111,34 +108,6 @@ CREATE INDEX IF NOT EXISTS idx_assets_location  ON assets(location_id);
 CREATE INDEX IF NOT EXISTS idx_assets_status    ON assets(status);
 CREATE INDEX IF NOT EXISTS idx_assets_condition ON assets(condition);
 CREATE INDEX IF NOT EXISTS idx_assets_assigned  ON assets(assigned_to);
-
--- ── Bookings (reservation system) ──────────────────────────────────────────
--- Same flow as room booking:  request → approve → check out → return.
-
-CREATE TABLE IF NOT EXISTS bookings (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    asset_id            INTEGER NOT NULL REFERENCES assets(id),
-    requested_by        INTEGER NOT NULL REFERENCES employees(id),
-    approved_by         INTEGER REFERENCES employees(id),
-    status              TEXT NOT NULL DEFAULT 'pending'
-                        CHECK(status IN ('pending','approved','checked_out',
-                                         'returned','cancelled','rejected')),
-    booked_from         TEXT NOT NULL,             -- ISO date or datetime
-    booked_to           TEXT NOT NULL,
-    checkout_date       TEXT,
-    actual_return       TEXT,
-    return_condition    TEXT CHECK(return_condition IN ('good','fair','damaged')),
-    pickup_location_id  INTEGER REFERENCES locations(id),
-    return_location_id  INTEGER REFERENCES locations(id),
-    purpose             TEXT,                      -- why they need it
-    notes               TEXT,
-    created_at          TEXT DEFAULT (datetime('now')),
-    updated_at          TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_bookings_asset    ON bookings(asset_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_user     ON bookings(requested_by);
-CREATE INDEX IF NOT EXISTS idx_bookings_status   ON bookings(status);
-CREATE INDEX IF NOT EXISTS idx_bookings_dates    ON bookings(booked_from, booked_to);
 
 -- ── Tickets (maintenance, requests, incidents) ─────────────────────────────
 

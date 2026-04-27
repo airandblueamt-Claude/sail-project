@@ -54,64 +54,6 @@ def _base_html(content):
 
 # ── Notification functions ───────────────────────────────────────────
 
-def notify_booking_submitted(booking, asset, requester):
-    """Notify admin of new booking request."""
-    send_email(ADMIN_EMAIL, f"Booking Request: {asset['asset_tag']}",
-        _base_html(f"""
-            <h2 style="margin-top:0;">New Booking Request</h2>
-            <table style="width:100%;border-collapse:collapse;font-size:14px;">
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Requested by</td>
-                    <td style="padding:6px 0;"><strong>{requester['name']}</strong> ({requester.get('email','')})</td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Asset</td>
-                    <td style="padding:6px 0;"><strong>{asset['asset_tag']}</strong> — {asset['eq_name']} ({asset['brand']})</td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Dates</td>
-                    <td style="padding:6px 0;">{booking['booked_from']} to {booking['booked_to']}</td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Purpose</td>
-                    <td style="padding:6px 0;">{booking.get('purpose','—')}</td></tr>
-            </table>
-            <p style="margin-top:16px;">
-                <a href="{APP_URL}/bookings/admin" style="display:inline-block;background:#22c55e;color:#fff;
-                   padding:10px 24px;border-radius:4px;text-decoration:none;">Review Bookings</a>
-            </p>
-        """))
-
-
-def notify_booking_status(booking, asset, requester, new_status, admin_name=None):
-    """Notify the requester that their booking status changed."""
-    status_labels = {
-        'approved': ('Approved', '#22c55e', 'Your booking has been approved. Please collect the equipment.'),
-        'rejected': ('Rejected', '#ef4444', 'Your booking request has been declined.'),
-        'checked_out': ('Checked Out', '#4f6ef7', 'Equipment has been handed over to you.'),
-        'returned': ('Returned', '#22c55e', 'Equipment has been returned. Thank you!'),
-        'cancelled': ('Cancelled', '#8a8fa8', 'Your booking has been cancelled.'),
-    }
-    label, color, message = status_labels.get(new_status, (new_status, '#8a8fa8', ''))
-
-    user_email = requester.get('email')
-    if not user_email:
-        return
-
-    send_email(user_email, f"Booking {label}: {asset['asset_tag']}",
-        _base_html(f"""
-            <h2 style="margin-top:0;">Booking {label}</h2>
-            <div style="background:{color}20;border-left:4px solid {color};padding:12px 16px;
-                        border-radius:4px;margin-bottom:16px;">
-                <strong style="color:{color};">{message}</strong>
-            </div>
-            <table style="width:100%;border-collapse:collapse;font-size:14px;">
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Asset</td>
-                    <td style="padding:6px 0;"><strong>{asset['asset_tag']}</strong> — {asset['eq_name']} ({asset['brand']})</td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Dates</td>
-                    <td style="padding:6px 0;">{booking['booked_from']} to {booking['booked_to']}</td></tr>
-                {"<tr><td style='padding:6px 0;color:#8a8fa8;'>Processed by</td><td style='padding:6px 0;'>" + admin_name + "</td></tr>" if admin_name else ""}
-            </table>
-            <p style="margin-top:16px;">
-                <a href="{APP_URL}/bookings/mine" style="display:inline-block;background:#4f6ef7;color:#fff;
-                   padding:10px 24px;border-radius:4px;text-decoration:none;">View My Bookings</a>
-            </p>
-        """))
-
-
 def notify_ticket_created(ticket, submitter):
     """Notify admin of new ticket."""
     priority_colors = {'low': '#22c55e', 'medium': '#f59e0b', 'high': '#f97316', 'critical': '#ef4444'}

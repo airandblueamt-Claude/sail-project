@@ -82,65 +82,8 @@
             <div class="stat-icon blue"><i data-lucide="plus-circle"></i></div>
             <div class="stat-body"><span class="stat-value">{{ history.new_assets }}</span><span class="stat-label">New Assets Registered</span></div>
         </div>
-        {% if bookings_enabled %}
-        <div class="stat-card">
-            <div class="stat-icon purple"><i data-lucide="calendar-plus"></i></div>
-            <div class="stat-body"><span class="stat-value">{{ history.bookings_created }}</span><span class="stat-label">Bookings Created</span></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon yellow"><i data-lucide="log-out"></i></div>
-            <div class="stat-body"><span class="stat-value">{{ history.checkouts }}</span><span class="stat-label">Checkouts</span></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon green"><i data-lucide="log-in"></i></div>
-            <div class="stat-body"><span class="stat-value">{{ history.returns }}</span><span class="stat-label">Returns</span></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon red"><i data-lucide="x-circle"></i></div>
-            <div class="stat-body"><span class="stat-value">{{ history.rejected }}</span><span class="stat-label">Rejected</span></div>
-        </div>
-        {% endif %}
     </div>
 </div>
-
-{% if bookings_enabled and top_models %}
-<div class="section">
-    <h3>Most-Booked Equipment (in period)</h3>
-    <table class="data-table">
-        <thead><tr><th>Equipment</th><th>Category</th><th class="num">Bookings</th></tr></thead>
-        <tbody>
-            {% for r in top_models %}
-            <tr>
-                <td><strong>{{ r.eq_name }}</strong>{% if r.brand %} <span style="color:var(--text-muted)">({{ r.brand }})</span>{% endif %}</td>
-                <td>{{ r.category }}</td>
-                <td class="num">{{ r.bookings }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-{% if bookings_enabled and recent_bookings %}
-<div class="section">
-    <h3>Bookings Created in Period</h3>
-    <table class="data-table">
-        <thead><tr><th>Asset</th><th>Equipment</th><th>Requester</th><th>Dates</th><th>Status</th><th>Created</th></tr></thead>
-        <tbody>
-            {% for b in recent_bookings %}
-            <tr>
-                <td><strong>{{ b.asset_tag }}</strong></td>
-                <td>{{ b.eq_name }}{% if b.brand %} ({{ b.brand }}){% endif %}</td>
-                <td>{{ b.requester_name }}</td>
-                <td>{{ b.booked_from }} &rarr; {{ b.booked_to }}</td>
-                <td><span class="badge badge-status-{{ b.status }}">{{ b.status|replace('_',' ') }}</span></td>
-                <td>{{ b.created_at[:10] }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
 
 {% if agreements_expired or agreements_expiring %}
 <div class="section">
