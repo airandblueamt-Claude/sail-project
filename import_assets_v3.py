@@ -11,6 +11,7 @@ locations, and equipment_models are derived from the row data.
 See docs/superpowers/specs/2026-04-27-asset-data-bootstrap-design.md.
 """
 import argparse
+import datetime
 import os
 import re
 import sys
@@ -58,20 +59,40 @@ EXPECTED_HEADERS = {
 
 
 def s(v):
-    """Coerce a cell to a stripped string, or None for empty/whitespace."""
+    """Coerce a cell to a stripped string, or None for empty/whitespace.
+
+    Datetime cells from openpyxl are returned as ISO-format dates so they
+    survive into notes/UI without a noisy '00:00:00' time component.
+    """
     if v is None:
         return None
+    if isinstance(v, datetime.datetime):
+        return v.date().isoformat()
+    if isinstance(v, datetime.date):
+        return v.isoformat()
     if isinstance(v, str):
         v = v.strip()
         return v or None
     return str(v).strip() or None
 
 
+# Manual overrides for `.title()` mistakes on known acronyms.
+CATEGORY_CANONICAL = {
+    "Google Tv": "Google TV",
+    "Tv Screen": "TV Screen",
+}
+
+
 def normalize_category(raw):
-    """Fold "MONITOR", "Smart board", etc. to a canonical title-case form."""
+    """Fold "MONITOR", "Smart board", etc. to a canonical title-case form.
+
+    Some V3 categories contain acronyms that .title() corrupts (TV -> Tv);
+    CATEGORY_CANONICAL post-corrects those known cases.
+    """
     if not raw:
         return None
-    return raw.strip().title()
+    titled = raw.strip().title()
+    return CATEGORY_CANONICAL.get(titled, titled)
 
 
 def normalize_item_name(raw):
