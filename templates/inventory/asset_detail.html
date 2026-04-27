@@ -43,6 +43,7 @@
                 <th>Priority</th>
                 <th>Status</th>
                 <th>Title</th>
+                <th>Reported by</th>
                 <th>Resolved</th>
             </tr>
         </thead>
@@ -55,10 +56,11 @@
                 <td><span class="badge badge-{{ t.priority }}">{{ t.priority }}</span></td>
                 <td><span class="badge">{{ t.status }}</span></td>
                 <td>{{ t.title }}</td>
+                <td>{{ t.submitter_name or '—' }}</td>
                 <td>{{ t.resolved_at[:10] if t.resolved_at else '—' }}</td>
             </tr>
             {% if t.resolution %}
-            <tr><td></td><td colspan="6" class="muted" style="font-size:0.9em"><strong>Resolution:</strong> {{ t.resolution }}</td></tr>
+            <tr><td></td><td colspan="7" class="muted" style="font-size:0.9em"><strong>Resolution:</strong> {{ t.resolution }}</td></tr>
             {% endif %}
             {% endfor %}
         </tbody>
