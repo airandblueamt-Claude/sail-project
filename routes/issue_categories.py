@@ -5,6 +5,13 @@ from database import get_db, log_audit
 issue_categories_bp = Blueprint('issue_categories', __name__)
 
 
+@issue_categories_bp.before_request
+def _require_admin():
+    if not g.user or g.user['role'] not in ('admin', 'manager'):
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard.index'))
+
+
 @issue_categories_bp.route('/')
 def index():
     with get_db() as conn:
