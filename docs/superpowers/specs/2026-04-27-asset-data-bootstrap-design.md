@@ -29,7 +29,7 @@ Assets Inventory _20-04-2026-Tool (V3).xlsx
           ├─ backup sail.db → backups/
           ├─ wipe: assets, equipment_models, categories, locations
           ├─ derive categories  (11 rows after case normalization)
-          ├─ derive locations   (~39 rows from "Official location"; messy, expected to be cleaned up post-import)
+          ├─ derive locations   (40 rows from "Official location"; messy, expected to be cleaned up post-import)
           ├─ derive equipment_models  (group by category + item name → 31 rows)
           └─ insert assets (one per Excel row)
 ```
@@ -49,7 +49,7 @@ python app.py                # serves on :5555
 | `assets` | wiped + reloaded (230 rows) — schema gains `holder_name`, `remark`; `status` CHECK widened |
 | `equipment_models` | wiped + reloaded (31 rows derived) |
 | `categories` | wiped + reloaded (11 rows derived); seed INSERTs removed from `schema.sql` |
-| `locations` | wiped + reloaded (~39 rows derived; data is dirty — duplicates and typos expected, to be cleaned up post-import) |
+| `locations` | wiped + reloaded (40 rows derived; data is dirty — duplicates and typos expected, to be cleaned up post-import) |
 | `employees` | untouched (login accounts preserved) |
 | `bookings`, `tickets`, `ticket_comments`, `equipment_agreements`, `audit_log` | untouched (currently empty) |
 
@@ -168,18 +168,18 @@ If a host blocks hotlinking and an image fails to render, we'll address it case-
 ```
 SUMMARY
   Categories:        11
-  Locations:         ~39
+  Locations:         40
   Equipment models:  31
   Assets:            230
     available:       127    (75 storage-pool + 51 blank Found + 1 "-")
     in_use:          87     (project/team/person holders)
     missing:         15     (Remark = "Not Found/Missing")
     decommissioned:  1      (NOT SAIL)
-  Bookable models:   ~27 of 31
+  Bookable models:   28 of 31
 DATA QUALITY
-  Rows w/o Product_ID:        3    (assigned SAIL-NEW-{sequence})
-  Rows w/ holder badge#:      ~17  (kept as free text)
-  Rows w/ "Found Not in App": 3    (status from holder, remark preserved)
+  Rows w/o Product_ID:        3   (assigned SAIL-NEW-{sequence})
+  Rows w/ holder badge#:      11  (kept as free text)
+  Rows w/ "Found Not in App": 3   (status from holder, remark preserved)
 ```
 
 Hard invariant: `assets COUNT = 230` AND status counts sum to 230. If not, the transaction is rolled back and the script exits non-zero.
