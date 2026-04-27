@@ -89,7 +89,79 @@ fly ssh console
 fly machine restart
 ```
 
-### Auto-deploy on git push (GitHub Actions)
+## Deploying to PythonAnywhere (free, no credit card)
+
+If you don't want to give Fly.io a credit card, PythonAnywhere's Beginner tier hosts this app for free indefinitely. Tradeoffs vs. Fly: URL is `<username>.pythonanywhere.com` (no custom domain on free), and outbound traffic is whitelist-only (Gmail SMTP is on the whitelist, so emails work).
+
+1. **Sign up** at [pythonanywhere.com](https://www.pythonanywhere.com/registration/register/beginner/) — Beginner account, no card.
+
+2. **Open a Bash console** (Consoles tab → Bash) and clone the repo:
+
+   ```bash
+   git clone https://github.com/airandblueamt-Claude/sail-project.git
+   cd sail-project
+   python3.12 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   python init_db.py
+   python import_assets_v3.py
+   ```
+
+3. **Create the web app**: Web tab → Add a new web app → Next → "Manual configuration" → Python 3.12 → Next → Next.
+
+4. **Configure paths** on the same Web tab:
+
+   | Setting | Value |
+   |---------|-------|
+   | Source code | `/home/<username>/sail-project` |
+   | Working directory | `/home/<username>/sail-project` |
+   | Virtualenv | `/home/<username>/sail-project/venv` |
+
+5. **Edit the WSGI file** (Web tab → "WSGI configuration file" link). Replace the entire contents with:
+
+   ```python
+   import os
+   import sys
+
+   PROJECT = '/home/<username>/sail-project'
+   if PROJECT not in sys.path:
+       sys.path.insert(0, PROJECT)
+
+   # Production env vars (PythonAnywhere has no separate UI for these on the free tier).
+   os.environ.setdefault('SAIL_SECRET_KEY', '<random-32-byte-hex-string>')
+   os.environ.setdefault('SAIL_SMTP_PASSWORD', '<gmail-app-password>')
+   os.environ.setdefault('SAIL_APP_URL', 'https://<username>.pythonanywhere.com')
+
+   from wsgi import application
+   ```
+
+   Replace `<username>` (3 places) and the two `<...>` secrets. Generate the secret key with `python3 -c 'import secrets; print(secrets.token_hex(32))'` in any local terminal.
+
+6. **(Optional, faster)** Add a static files mapping on the Web tab:
+
+   | URL | Directory |
+   |-----|-----------|
+   | `/static/` | `/home/<username>/sail-project/static` |
+
+7. **Click "Reload <username>.pythonanywhere.com"** at the top of the Web tab.
+
+8. **Visit** `https://<username>.pythonanywhere.com` and log in with `airandblueamt@gmail.com` / `Aramco@123`.
+
+To deploy updates later:
+
+```bash
+# In the PA Bash console:
+cd ~/sail-project
+git pull
+source venv/bin/activate
+pip install -r requirements.txt    # only if requirements.txt changed
+# If schema.sql changed, you may need to reset the DB — back up first!
+# Then click Reload on the Web tab.
+```
+
+The free tier's web app sleeps after 3 months of inactivity; PythonAnywhere will email you to extend.
+
+### Auto-deploy on git push (GitHub Actions, Fly.io only)
 
 `.github/workflows/fly-deploy.yml` ships in the repo. Every push to `master` triggers `flyctl deploy --remote-only`. Setup is two steps:
 
