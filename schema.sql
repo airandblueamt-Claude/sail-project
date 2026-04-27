@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS employees (
     email           TEXT,
     role            TEXT DEFAULT 'employee'
                     CHECK(role IN ('admin','manager','technician','employee')),
+    password_hash   TEXT,
     is_active       INTEGER DEFAULT 1,
     created_at      TEXT DEFAULT (datetime('now'))
 );
@@ -142,25 +143,28 @@ CREATE INDEX IF NOT EXISTS idx_bookings_dates    ON bookings(booked_from, booked
 -- ── Tickets (maintenance, requests, incidents) ─────────────────────────────
 
 CREATE TABLE IF NOT EXISTS tickets (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    ticket_number   TEXT NOT NULL UNIQUE,          -- "TKT-0001"
-    type            TEXT NOT NULL
-                    CHECK(type IN ('maintenance','move','new_request',
-                                   'incident','decommission','other')),
-    priority        TEXT DEFAULT 'medium'
-                    CHECK(priority IN ('low','medium','high','critical')),
-    status          TEXT DEFAULT 'open'
-                    CHECK(status IN ('open','in_progress','waiting','resolved','closed')),
-    asset_id        INTEGER REFERENCES assets(id), -- NULL for new-equipment requests
-    submitted_by    INTEGER NOT NULL REFERENCES employees(id),
-    assigned_to     INTEGER REFERENCES employees(id),  -- technician / admin handling it
-    title           TEXT NOT NULL,
-    description     TEXT,
-    resolution      TEXT,
-    resolved_at     TEXT,
-    closed_at       TEXT,
-    created_at      TEXT DEFAULT (datetime('now')),
-    updated_at      TEXT DEFAULT (datetime('now'))
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_number       TEXT NOT NULL UNIQUE,
+    type                TEXT NOT NULL
+                        CHECK(type IN ('maintenance','move','new_request',
+                                       'incident','decommission','other')),
+    priority            TEXT DEFAULT 'medium'
+                        CHECK(priority IN ('low','medium','high','critical')),
+    status              TEXT DEFAULT 'open'
+                        CHECK(status IN ('open','in_progress','waiting','resolved','closed')),
+    asset_id            INTEGER REFERENCES assets(id),
+    submitted_by        INTEGER NOT NULL REFERENCES employees(id),
+    assigned_to         INTEGER REFERENCES employees(id),
+    title               TEXT NOT NULL,
+    description         TEXT,
+    resolution          TEXT,
+    resolved_at         TEXT,
+    closed_at           TEXT,
+    affected_user_name  TEXT,
+    affected_user_email TEXT,
+    issue_category_id   INTEGER REFERENCES issue_categories(id),
+    created_at          TEXT DEFAULT (datetime('now')),
+    updated_at          TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_tickets_number   ON tickets(ticket_number);
 CREATE INDEX IF NOT EXISTS idx_tickets_asset    ON tickets(asset_id);
@@ -168,6 +172,7 @@ CREATE INDEX IF NOT EXISTS idx_tickets_status   ON tickets(status);
 CREATE INDEX IF NOT EXISTS idx_tickets_type     ON tickets(type);
 CREATE INDEX IF NOT EXISTS idx_tickets_assignee ON tickets(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority, status);
+CREATE INDEX IF NOT EXISTS idx_tickets_issue_cat ON tickets(issue_category_id);
 
 CREATE TABLE IF NOT EXISTS ticket_comments (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,6 +183,17 @@ CREATE TABLE IF NOT EXISTS ticket_comments (
     created_at  TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_tcomments_ticket ON ticket_comments(ticket_id);
+
+-- ── Issue categories (team-managed dropdown for tickets) ───────────────────
+
+CREATE TABLE IF NOT EXISTS issue_categories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    is_active   INTEGER DEFAULT 1,
+    created_by  INTEGER REFERENCES employees(id),
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_issue_categories_active ON issue_categories(is_active);
 
 -- ── Audit log ───────────────────────────────────────────────────────────────
 
