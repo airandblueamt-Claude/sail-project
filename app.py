@@ -105,6 +105,7 @@ def create_app():
     from routes.employees import employees_bp
     from routes.help import help_bp
     from routes.reports import reports_bp
+    from routes.issue_categories import issue_categories_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(inventory_bp, url_prefix='/inventory')
@@ -113,6 +114,7 @@ def create_app():
     app.register_blueprint(employees_bp, url_prefix='/employees')
     app.register_blueprint(help_bp, url_prefix='/help')
     app.register_blueprint(reports_bp, url_prefix='/reports')
+    app.register_blueprint(issue_categories_bp, url_prefix='/issue-categories')
 
     return app
 

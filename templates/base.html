@@ -62,6 +62,9 @@
             <li><a href="{{ url_for('employees.list_employees') }}" class="{% if request.blueprint == 'employees' %}active{% endif %}">
                 <i data-lucide="users"></i> Employees
             </a></li>
+            <li><a href="{{ url_for('issue_categories.index') }}" class="{% if request.endpoint and request.endpoint.startswith('issue_categories.') %}active{% endif %}">
+                <i data-lucide="tags"></i> Issue Categories
+            </a></li>
             {% endif %}
         </ul>
         <div class="sidebar-footer">
