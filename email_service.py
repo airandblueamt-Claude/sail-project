@@ -54,31 +54,6 @@ def _base_html(content):
 
 # ── Notification functions ───────────────────────────────────────────
 
-def notify_registration(user_name, user_email):
-    """Notify admin of new registration + welcome the user."""
-    # Admin notification
-    send_email(ADMIN_EMAIL, f"New Registration: {user_name}",
-        _base_html(f"""
-            <h2 style="margin-top:0;">New User Registered</h2>
-            <p><strong>{user_name}</strong> ({user_email}) has registered on SAIL.</p>
-            <p>You can manage their role in <a href="{APP_URL}/employees/">Employee Management</a>.</p>
-        """))
-
-    # Welcome email to user
-    send_email(user_email, "Welcome to SAIL",
-        _base_html(f"""
-            <h2 style="margin-top:0;">Welcome, {user_name}!</h2>
-            <p>Your SAIL account has been created. You can now:</p>
-            <ul>
-                <li>Browse and book equipment</li>
-                <li>Submit maintenance or support tickets</li>
-                <li>Track your bookings and requests</li>
-            </ul>
-            <p><a href="{APP_URL}" style="display:inline-block;background:#4f6ef7;color:#fff;
-               padding:10px 24px;border-radius:4px;text-decoration:none;">Open SAIL</a></p>
-        """))
-
-
 def notify_booking_submitted(booking, asset, requester):
     """Notify admin of new booking request."""
     send_email(ADMIN_EMAIL, f"Booking Request: {asset['asset_tag']}",
