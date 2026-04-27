@@ -19,6 +19,9 @@
             <li><a href="{{ url_for('dashboard.index') }}" class="{% if request.endpoint == 'dashboard.index' %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i> Dashboard
             </a></li>
+            <li><a href="{{ url_for('inventory.models') }}" class="{% if request.endpoint == 'inventory.models' %}active{% endif %}">
+                <i data-lucide="layout-grid"></i> Equipment Catalog
+            </a></li>
             <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if request.endpoint == 'tickets.my_tickets' %}active{% endif %}">
                 <i data-lucide="ticket"></i> My Tickets
             </a></li>
