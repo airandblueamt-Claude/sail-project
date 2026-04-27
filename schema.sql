@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS equipment_models (
     unit            TEXT DEFAULT 'EA',             -- EA, LOT, Item
     expected_qty    INTEGER,                       -- qty from the equipment list (for tracking)
     is_bookable     INTEGER DEFAULT 0,             -- can individual units be reserved?
+    image_path      TEXT,                          -- shared photo: local file under static/, or external http(s) URL
     notes           TEXT,
     created_at      TEXT DEFAULT (datetime('now'))
 );
@@ -83,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_eqmodels_brand    ON equipment_models(brand);
 
 CREATE TABLE IF NOT EXISTS assets (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    asset_tag           TEXT NOT NULL UNIQUE,      -- "SAIL-0001", human-readable ID
+    asset_tag           TEXT NOT NULL UNIQUE,      -- "SAIL-16038"
     equipment_model_id  INTEGER NOT NULL REFERENCES equipment_models(id),
     serial_number       TEXT,
     location_id         INTEGER REFERENCES locations(id),
@@ -91,12 +92,14 @@ CREATE TABLE IF NOT EXISTS assets (
                         CHECK(condition IN ('good','fair','damaged','decommissioned')),
     status              TEXT DEFAULT 'available'
                         CHECK(status IN ('available','in_use','reserved','checked_out',
-                                         'maintenance','decommissioned')),
-    assigned_to         INTEGER REFERENCES employees(id),  -- permanent assignment (if any)
-    qty_represented     INTEGER DEFAULT 1,         -- >1 for summarised bulk items
+                                         'maintenance','decommissioned','missing')),
+    assigned_to         INTEGER REFERENCES employees(id),
+    qty_represented     INTEGER DEFAULT 1,
     purchase_date       TEXT,
     warranty_expiry     TEXT,
     image_path          TEXT,
+    holder_name         TEXT,                      -- free-text from V3 inventory
+    remark              TEXT,                      -- raw "Found"/"Not Found/Missing"/"Found Not in App"
     notes               TEXT,
     created_at          TEXT DEFAULT (datetime('now')),
     updated_at          TEXT DEFAULT (datetime('now'))
@@ -210,22 +213,3 @@ CREATE INDEX IF NOT EXISTS idx_agreements_model    ON equipment_agreements(model
 CREATE INDEX IF NOT EXISTS idx_agreements_end_date ON equipment_agreements(end_date);
 CREATE INDEX IF NOT EXISTS idx_agreements_type     ON equipment_agreements(agreement_type);
 
--- ============================================================================
--- Seed categories from the cleaned equipment list
--- ============================================================================
-
-INSERT OR IGNORE INTO categories (name) VALUES
-    ('Computers & Peripherals'),
-    ('Audio Equipment'),
-    ('Display Equipment'),
-    ('Control Systems'),
-    ('Monitoring & Recording'),
-    ('Computing Infrastructure'),
-    ('Networking'),
-    ('Miscellaneous'),
-    ('Data Center & Switches'),
-    ('Servers'),
-    ('Recording System'),
-    ('Firewall & Security'),
-    ('IT Solutions & Applications'),
-    ('Access Control');
