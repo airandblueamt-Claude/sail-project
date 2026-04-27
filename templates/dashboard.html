@@ -15,24 +15,25 @@
 </div>
 
 <div class="stat-grid">
-    <div class="stat-card">
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
         <div class="stat-label">Open Tickets</div>
         <div class="stat-value">{{ stats.open_tickets }}</div>
-        <a href="{{ url_for('tickets.list_tickets') }}" class="muted">View all</a>
+        <a href="{{ url_for('tickets.list_tickets') }}" class="muted" style="font-size:.78rem">View all</a>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
         <div class="stat-label">Assets Available</div>
         <div class="stat-value">{{ stats.asset_counts.available or 0 }}</div>
-        <span class="muted">of {{ stats.asset_counts.total }}</span>
+        <span class="muted" style="font-size:.78rem">of {{ stats.asset_counts.total }}</span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
         <div class="stat-label">Assets In Use</div>
         <div class="stat-value">{{ stats.asset_counts.in_use or 0 }}</div>
+        <span class="muted" style="font-size:.78rem">&nbsp;</span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
         <div class="stat-label">Unhealthy Assets</div>
         <div class="stat-value">{{ stats.unhealthy_assets|length }}</div>
-        <span class="muted">maintenance or damaged</span>
+        <span class="muted" style="font-size:.78rem">maintenance or damaged</span>
     </div>
 </div>
 
