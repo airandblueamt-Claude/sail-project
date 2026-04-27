@@ -78,39 +78,53 @@ def list_tickets():
 def new_ticket():
     with get_db() as conn:
         if request.method == 'POST':
+            asset_id = request.form.get('asset_id', type=int)
+            issue_cat_id = request.form.get('issue_category_id', type=int)
+            if not asset_id:
+                flash('Asset is required.', 'error')
+                return redirect(request.url)
+            if not issue_cat_id:
+                flash('Issue category is required.', 'error')
+                return redirect(request.url)
+
             ticket_num = next_ticket_number(conn)
             cur = conn.execute("""
                 INSERT INTO tickets
                     (ticket_number, type, priority, title, description,
-                     asset_id, submitted_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                     asset_id, submitted_by, issue_category_id,
+                     affected_user_name, affected_user_email)
+                VALUES (?, 'incident', ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 ticket_num,
-                request.form['type'],
                 request.form.get('priority', 'medium'),
                 request.form['title'],
                 request.form.get('description', ''),
-                request.form.get('asset_id', type=int) or None,
+                asset_id,
                 g.user['id'],
+                issue_cat_id,
+                request.form.get('affected_user_name', '').strip() or None,
+                request.form.get('affected_user_email', '').strip() or None,
             ))
             log_audit(conn, 'tickets', cur.lastrowid, 'create',
                       changed_by=g.user['id'])
-            notify_ticket_created(
-                {'ticket_number': ticket_num, 'type': request.form['type'],
-                 'priority': request.form.get('priority', 'medium'),
-                 'title': request.form['title'],
-                 'description': request.form.get('description', '')},
-                g.user)
             flash(f'Ticket {ticket_num} created.', 'success')
-            return redirect(url_for('tickets.my_tickets'))
+            return redirect(url_for('tickets.ticket_detail', ticket_id=cur.lastrowid))
 
+        preselect_asset_id = request.args.get('asset_id', type=int)
         assets = conn.execute("""
             SELECT a.id, a.asset_tag, em.name, em.brand
             FROM assets a JOIN equipment_models em ON a.equipment_model_id = em.id
             ORDER BY a.asset_tag
         """).fetchall()
+        categories = conn.execute("""
+            SELECT id, name FROM issue_categories
+            WHERE is_active = 1 ORDER BY name COLLATE NOCASE
+        """).fetchall()
 
-    return render_template('tickets/new.html', assets=assets)
+    return render_template('tickets/new.html',
+                           assets=assets,
+                           categories=categories,
+                           preselect_asset_id=preselect_asset_id)
 
 
 @tickets_bp.route('/<int:ticket_id>')

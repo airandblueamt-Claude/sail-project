@@ -3,23 +3,34 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <a href="{{ url_for('tickets.my_tickets') }}" class="breadcrumb">My Tickets</a>
-        <h2>New Ticket</h2>
+        <a href="{{ url_for('tickets.list_tickets') }}" class="breadcrumb">Tickets</a>
+        <h2>Raise New Issue</h2>
     </div>
 </div>
 
 <form method="post" class="form-card">
+    <div class="form-row">
+        <label>Asset *</label>
+        <select name="asset_id" required class="input">
+            <option value="">-- pick an asset --</option>
+            {% for a in assets %}
+            <option value="{{ a.id }}" {% if preselect_asset_id == a.id %}selected{% endif %}>
+                {{ a.asset_tag }} — {{ a.name }}{% if a.brand %} ({{ a.brand }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
     <div class="form-row-group">
-        <div class="form-row">
-            <label>Type *</label>
-            <select name="type" required class="input">
-                <option value="maintenance">Maintenance / Repair</option>
-                <option value="incident">Incident / Something Broken</option>
-                <option value="move">Move Request</option>
-                <option value="new_request">New Equipment Request</option>
-                <option value="decommission">Decommission</option>
-                <option value="other">Other</option>
+        <div class="form-row" style="flex:1">
+            <label>Issue Category *</label>
+            <select name="issue_category_id" required class="input">
+                <option value="">-- pick a category --</option>
+                {% for c in categories %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
             </select>
+            <small><a href="{{ url_for('issue_categories.index') }}" target="_blank">+ add new category</a></small>
         </div>
         <div class="form-row">
             <label>Priority</label>
@@ -31,26 +42,34 @@
             </select>
         </div>
     </div>
+
     <div class="form-row">
         <label>Title *</label>
-        <input type="text" name="title" required class="input" placeholder="Brief summary of the issue or request">
+        <input type="text" name="title" required class="input" maxlength="200"
+               placeholder="One-line summary, e.g. 'Display flickers under 1080p'">
     </div>
     <div class="form-row">
         <label>Description</label>
-        <textarea name="description" rows="4" class="input" placeholder="Detailed description of what happened or what you need..."></textarea>
+        <textarea name="description" rows="4" class="input"
+                  placeholder="What is happening? When did it start? Anything the user already tried?"></textarea>
     </div>
-    <div class="form-row">
-        <label>Related Asset (optional)</label>
-        <select name="asset_id" class="input">
-            <option value="">None / General Request</option>
-            {% for a in assets %}
-            <option value="{{ a.id }}">{{ a.asset_tag }} - {{ a.name }} ({{ a.brand }})</option>
-            {% endfor %}
-        </select>
+
+    <h4 style="margin-top:24px;margin-bottom:8px">Affected user (optional)</h4>
+    <p class="muted" style="margin-top:0;margin-bottom:12px">If you fill in an email, the user will be notified when the ticket is received and again when it is resolved.</p>
+    <div class="form-row-group">
+        <div class="form-row" style="flex:1">
+            <label>Name</label>
+            <input type="text" name="affected_user_name" class="input" maxlength="120">
+        </div>
+        <div class="form-row" style="flex:1">
+            <label>Email</label>
+            <input type="email" name="affected_user_email" class="input" placeholder="user@aramco.com">
+        </div>
     </div>
+
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Submit Ticket</button>
-        <a href="{{ url_for('tickets.my_tickets') }}" class="btn btn-ghost">Cancel</a>
+        <a href="{{ url_for('tickets.list_tickets') }}" class="btn btn-ghost">Cancel</a>
     </div>
 </form>
 {% endblock %}
