@@ -28,7 +28,7 @@ inventory_bp = Blueprint('inventory', __name__)
 
 @inventory_bp.route('/')
 def models():
-    """Browse bookable equipment — this is what employees see."""
+    """Equipment catalog — card-grid view of all models."""
     q = request.args.get('q', '').strip()
     cat = request.args.get('category', '')
     page = max(1, request.args.get('page', 1, type=int))
@@ -76,7 +76,7 @@ def models():
 
 @inventory_bp.route('/<int:model_id>')
 def model_detail(model_id):
-    """View equipment model and its available assets (with Book buttons)."""
+    """View equipment model and its individual assets."""
     with get_db() as conn:
         model = conn.execute(
             "SELECT em.*, c.name as category_name FROM equipment_models em "

@@ -4,7 +4,9 @@
 
 <div class="page-header">
     <div>
-        <h2>Welcome, {{ current_user.name.split()[0] }}</h2>
+        {% set first = (current_user.name or '').split()[:1]|join %}
+        {% set greet_name = current_user.name if first.endswith('.') or not first else first %}
+        <h2>Welcome, {{ greet_name or current_user.email.split('@')[0] }}</h2>
         <p class="muted">
             {{ stats.open_tickets }} open ticket{{ '' if stats.open_tickets == 1 else 's' }} ·
             {{ stats.asset_counts.total }} assets tracked ·

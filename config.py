@@ -3,7 +3,10 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "sail.db")
-SECRET_KEY = "sail-2026-secret-key"
+SECRET_KEY = os.environ.get(
+    "SAIL_SECRET_KEY",
+    "dev-only-do-not-use-in-production-set-SAIL_SECRET_KEY",
+)
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
 PAGE_SIZE = 50
 

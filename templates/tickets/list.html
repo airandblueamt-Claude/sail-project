@@ -12,16 +12,11 @@
 </div>
 
 <div class="filter-bar">
-    <a href="{{ url_for('tickets.list_tickets') }}" class="btn btn-sm {% if not status and not ttype %}active{% endif %}">All</a>
+    <a href="{{ url_for('tickets.list_tickets') }}" class="btn btn-sm {% if not status %}active{% endif %}">All</a>
     <a href="?status=open" class="btn btn-sm {% if status == 'open' %}active{% endif %}">Open</a>
     <a href="?status=in_progress" class="btn btn-sm {% if status == 'in_progress' %}active{% endif %}">In Progress</a>
     <a href="?status=waiting" class="btn btn-sm {% if status == 'waiting' %}active{% endif %}">Waiting</a>
     <a href="?status=resolved" class="btn btn-sm {% if status == 'resolved' %}active{% endif %}">Resolved</a>
-    <span class="filter-sep">|</span>
-    <a href="?type=maintenance" class="btn btn-sm {% if ttype == 'maintenance' %}active{% endif %}">Maintenance</a>
-    <a href="?type=incident" class="btn btn-sm {% if ttype == 'incident' %}active{% endif %}">Incident</a>
-    <a href="?type=move" class="btn btn-sm {% if ttype == 'move' %}active{% endif %}">Move</a>
-    <a href="?type=new_request" class="btn btn-sm {% if ttype == 'new_request' %}active{% endif %}">New Request</a>
 </div>
 
 {% if tickets %}

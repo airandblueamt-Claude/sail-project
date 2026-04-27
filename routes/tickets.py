@@ -87,6 +87,13 @@ def new_ticket():
                 flash('Issue category is required.', 'error')
                 return redirect(request.url)
 
+            # Confirm the asset still exists (avoid a stale-tab IntegrityError).
+            asset_exists = conn.execute(
+                "SELECT 1 FROM assets WHERE id = ?", (asset_id,)).fetchone()
+            if not asset_exists:
+                flash('That asset no longer exists.', 'error')
+                return redirect(url_for('inventory.manage_assets'))
+
             ticket_num = next_ticket_number(conn)
             cur = conn.execute("""
                 INSERT INTO tickets
@@ -206,7 +213,12 @@ def update_ticket(ticket_id):
 
         new_status = request.form.get('status', old['status'])
         new_priority = request.form.get('priority', old['priority'])
-        new_assignee = request.form.get('assigned_to', type=int) or old['assigned_to']
+        # Preserve the explicit "unassigned" choice (None != absent field).
+        if 'assigned_to' in request.form:
+            raw = request.form.get('assigned_to', '').strip()
+            new_assignee = int(raw) if raw else None
+        else:
+            new_assignee = old['assigned_to']
         resolution = request.form.get('resolution', old['resolution'] or '').strip()
 
         # Resolution is required when transitioning into 'resolved'.
@@ -227,25 +239,33 @@ def update_ticket(ticket_id):
             WHERE id=?
         """, params + [ticket_id])
 
-        # If the assignee changed, notify the new assignee.
-        if new_assignee != old['assigned_to'] and new_assignee:
+        # If the assignee changed, audit and notify the new assignee.
+        if new_assignee != old['assigned_to']:
             log_audit(conn, 'tickets', ticket_id, 'update',
                       'assigned_to', old['assigned_to'], new_assignee,
                       changed_by=g.user['id'])
-            assignee = conn.execute(
-                "SELECT email FROM employees WHERE id=?", (new_assignee,)
-            ).fetchone()
-            if assignee and assignee['email']:
-                assigned_ticket = conn.execute("""
-                    SELECT t.ticket_number, t.title, t.description, t.priority,
-                           a.asset_tag, em.name AS equipment_name
-                    FROM tickets t
-                    LEFT JOIN assets a ON t.asset_id = a.id
-                    LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
-                    WHERE t.id = ?
-                """, (ticket_id,)).fetchone()
-                notify_ticket_assigned(dict(assigned_ticket),
-                                        assignee['email'], g.user['name'])
+            # Email the new assignee only when there IS one.
+            if new_assignee:
+                assignee = conn.execute(
+                    "SELECT email FROM employees WHERE id=?", (new_assignee,)
+                ).fetchone()
+                if assignee and assignee['email']:
+                    assigned_ticket = conn.execute("""
+                        SELECT t.ticket_number, t.title, t.description, t.priority,
+                               a.asset_tag, em.name AS equipment_name
+                        FROM tickets t
+                        LEFT JOIN assets a ON t.asset_id = a.id
+                        LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
+                        WHERE t.id = ?
+                    """, (ticket_id,)).fetchone()
+                    notify_ticket_assigned(dict(assigned_ticket),
+                                            assignee['email'], g.user['name'])
+
+        # Audit priority changes too.
+        if new_priority != old['priority']:
+            log_audit(conn, 'tickets', ticket_id, 'update',
+                      'priority', old['priority'], new_priority,
+                      changed_by=g.user['id'])
 
         if new_status != old['status']:
             log_audit(conn, 'tickets', ticket_id, 'status_change',

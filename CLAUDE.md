@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SAIL (Smart Asset Inventory & Logistics) is a single Flask app for IT asset management at AMT. It handles an equipment catalog, individual asset tracking, and a ticketing system (maintenance, moves, new-equipment requests, incidents).
+SAIL (Smart Asset Inventory & Logistics) is a single Flask app for IT asset management at AMT. It handles an equipment catalog, individual asset tracking, and issue tracking (all tickets are recorded as type `incident`).
 
 The booking module (reserve→approve→checkout→return) has been deliberately removed. The only remaining workflow for users is submitting and tracking tickets. Admins manage equipment, assets, and tickets.
 

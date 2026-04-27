@@ -1,5 +1,5 @@
 """Employees — register and manage staff."""
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, g
 from werkzeug.security import generate_password_hash
 from database import get_db, log_audit
 
@@ -70,7 +70,8 @@ def new_employee():
                 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)
             """, (name, badge, email, phone, role, dept_id,
                   generate_password_hash('Aramco@123')))
-            log_audit(conn, 'employees', cur.lastrowid, 'create')
+            log_audit(conn, 'employees', cur.lastrowid, 'create',
+                      changed_by=g.user['id'])
             flash(f'{name} added. Initial password is "Aramco@123" — they will be prompted to change it on first login.', 'success')
             return redirect(url_for('employees.list_employees'))
 
@@ -122,7 +123,8 @@ def edit_employee(emp_id):
                     department_id=?, is_active=?
                 WHERE id=?
             """, (name, badge, email, phone, role, dept_id, is_active, emp_id))
-            log_audit(conn, 'employees', emp_id, 'update')
+            log_audit(conn, 'employees', emp_id, 'update',
+                      changed_by=g.user['id'])
             flash('Employee updated.', 'success')
             return redirect(url_for('employees.list_employees'))
 
@@ -131,3 +133,25 @@ def edit_employee(emp_id):
         ).fetchall()
 
     return render_template('employees/edit.html', emp=emp, departments=departments)
+
+
+@employees_bp.route('/<int:emp_id>/reset-password', methods=['POST'])
+def reset_password(emp_id):
+    """Admin: reset an employee's password back to 'Aramco@123' and force change on next login."""
+    if g.user['role'] not in ('admin', 'manager'):
+        flash('Access denied.', 'error')
+        return redirect(url_for('employees.list_employees'))
+    from werkzeug.security import generate_password_hash
+    with get_db() as conn:
+        emp = conn.execute("SELECT name FROM employees WHERE id = ?", (emp_id,)).fetchone()
+        if not emp:
+            flash('Employee not found.', 'error')
+            return redirect(url_for('employees.list_employees'))
+        conn.execute(
+            "UPDATE employees SET password_hash = ?, must_change_password = 1 WHERE id = ?",
+            (generate_password_hash('Aramco@123'), emp_id))
+        log_audit(conn, 'employees', emp_id, 'update',
+                  'password_hash', '<reset>', '<reset>',
+                  changed_by=g.user['id'])
+        flash(f"{emp['name']}'s password reset to 'Aramco@123'. They will be prompted to change it on next login.", 'success')
+    return redirect(url_for('employees.edit_employee', emp_id=emp_id))

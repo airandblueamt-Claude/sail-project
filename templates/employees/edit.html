@@ -55,6 +55,11 @@
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Save Changes</button>
         <a href="{{ url_for('employees.list_employees') }}" class="btn btn-ghost">Cancel</a>
+        <form method="post" action="{{ url_for('employees.reset_password', emp_id=emp.id) }}"
+              onsubmit="return confirm('Reset {{ emp.name }}\'s password to the default? They will be prompted to change it on next login.');"
+              style="display:inline">
+            <button type="submit" class="btn btn-ghost" style="color:#dc2626">Reset password</button>
+        </form>
     </div>
 </form>
 {% endblock %}

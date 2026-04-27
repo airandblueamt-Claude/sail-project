@@ -5,133 +5,60 @@
     <h2>How It Works</h2>
 </div>
 
-<!-- ── For Everyone ──────────────────────────────────────────────────── -->
 <div class="guide-section">
-    <h3>Booking Equipment</h3>
-    <div class="guide-steps">
-        <div class="guide-step">
-            <div class="step-number">1</div>
-            <div>
-                <strong>Browse</strong>
-                <p>Go to <strong>Browse Equipment</strong> in the sidebar. Use the filters to find what you need — filter by category or set "Bookable" to see only reservable items.</p>
-            </div>
-        </div>
-        <div class="guide-step">
-            <div class="step-number">2</div>
-            <div>
-                <strong>Select an Asset</strong>
-                <p>Click on an equipment model to see its registered assets. Each asset shows its current status — look for ones marked <span class="badge badge-green">available</span>.</p>
-            </div>
-        </div>
-        <div class="guide-step">
-            <div class="step-number">3</div>
-            <div>
-                <strong>Book It</strong>
-                <p>Click the <strong>Book</strong> button next to an available asset. Pick your dates and explain why you need it — this helps the admin prioritise.</p>
-            </div>
-        </div>
-        <div class="guide-step">
-            <div class="step-number">4</div>
-            <div>
-                <strong>Wait for Approval</strong>
-                <p>Your booking goes to <span class="badge badge-status-pending">pending</span>. An admin will review and approve or reject it. You can track the status in <strong>My Bookings</strong>.</p>
-            </div>
-        </div>
-        <div class="guide-step">
-            <div class="step-number">5</div>
-            <div>
-                <strong>Pick Up &amp; Return</strong>
-                <p>Once approved, the admin will hand over the equipment (<span class="badge badge-status-checked_out">checked out</span>). When you're done, return it and the admin marks it as <span class="badge badge-status-returned">returned</span>.</p>
-            </div>
-        </div>
-    </div>
+    <h3>What SAIL Is For</h3>
+    <p>SAIL is the AMT control team's tool for logging issues against company assets, assigning repair work to operation-team members, and building a per-asset issue history over time. End users do <strong>not</strong> log in to SAIL — they email the control team, and the team logs the ticket on their behalf.</p>
 </div>
 
 <div class="guide-section">
-    <h3>Submitting a Ticket</h3>
-    <div class="guide-steps">
-        <div class="guide-step">
-            <div class="step-number">1</div>
-            <div>
-                <strong>Create a Ticket</strong>
-                <p>Go to <strong>My Tickets</strong> and click <strong>New Ticket</strong>. Choose the type:</p>
-                <ul class="guide-list">
-                    <li><span class="badge badge-type-maintenance">maintenance</span> — something needs repair</li>
-                    <li><span class="badge badge-type-incident">incident</span> — something is broken or not working</li>
-                    <li><span class="badge badge-type-move">move</span> — equipment needs to be relocated</li>
-                    <li><span class="badge badge-type-new_request">new request</span> — request new equipment</li>
-                    <li><span class="badge badge-type-decommission">decommission</span> — equipment should be retired</li>
-                </ul>
-            </div>
-        </div>
-        <div class="guide-step">
-            <div class="step-number">2</div>
-            <div>
-                <strong>Track Progress</strong>
-                <p>Your ticket moves through: <span class="badge badge-status-open">open</span> &rarr; <span class="badge badge-status-in_progress">in progress</span> &rarr; <span class="badge badge-status-resolved">resolved</span> &rarr; <span class="badge badge-status-closed">closed</span>. You can add comments to provide more details.</p>
-            </div>
-        </div>
-    </div>
+    <h3>Who Uses SAIL</h3>
+    <ul>
+        <li><strong>Control-team admins / managers</strong> — raise tickets, assign work, manage equipment and staff records.</li>
+        <li><strong>Operation-team technicians</strong> — receive ticket assignments by email, log in to update status, add comments, and write the resolution.</li>
+    </ul>
 </div>
 
-<!-- ── Admin Guide ───────────────────────────────────────────────────── -->
-{% if is_admin %}
-<div class="guide-section admin-guide">
-    <h3>Admin Guide</h3>
-
-    <div class="guide-card">
-        <h4>Adding New Equipment</h4>
-        <ol class="guide-list">
-            <li>Go to <strong>Browse Equipment</strong> &rarr; click <strong>+ Add Equipment Model</strong></li>
-            <li>Fill in the name, brand, category (or create a new one), specs, and quantity</li>
-            <li>Check <strong>Bookable</strong> if employees should be able to reserve it</li>
-            <li>Save &rarr; you land on the model detail page</li>
-            <li>Click <strong>+ Register Asset</strong> to add individual physical units (each gets a unique asset tag like SAIL-0001)</li>
-            <li>Add serial number and location for each unit</li>
-        </ol>
-        <p class="muted">Equipment Model = product type (e.g. "Dell Monitor U2722DE"). Asset = a specific physical unit of that model.</p>
-    </div>
-
-    <div class="guide-card">
-        <h4>Managing Bookings</h4>
-        <ol class="guide-list">
-            <li>Go to <strong>Booking Approvals</strong> in the sidebar</li>
-            <li><strong>Approve</strong> or <strong>Reject</strong> pending requests</li>
-            <li>When the employee comes to collect: click <strong>Hand Over</strong> to mark as checked out</li>
-            <li>When they return: click <strong>Receive Return</strong> to mark as returned and free up the asset</li>
-        </ol>
-    </div>
-
-    <div class="guide-card">
-        <h4>Managing Tickets</h4>
-        <ol class="guide-list">
-            <li>Go to <strong>All Tickets</strong> to see every ticket across the organisation</li>
-            <li>Click a ticket to view details, assign it to a technician, change priority or status</li>
-            <li>Add internal notes (visible only to admin/technicians) or public comments</li>
-            <li>Set resolution notes when resolving a ticket</li>
-        </ol>
-    </div>
-
-    <div class="guide-card">
-        <h4>Managing Employees</h4>
-        <ol class="guide-list">
-            <li>Go to <strong>Employees</strong> in the sidebar</li>
-            <li>Edit any employee to change their role:
-                <ul>
-                    <li><strong>employee</strong> — can browse, book, and submit tickets</li>
-                    <li><strong>technician</strong> — same as employee (future: assigned to tickets)</li>
-                    <li><strong>manager</strong> — full admin access</li>
-                    <li><strong>admin</strong> — full admin access</li>
-                </ul>
-            </li>
-            <li>Deactivate employees by unchecking "Active" — they won't be able to log in</li>
-        </ol>
-    </div>
-
-    <div class="guide-card">
-        <h4>Adding Locations</h4>
-        <p>When registering an asset, you can add new locations on the fly using the "Add a Location" form at the bottom of the page. Use short codes like <strong>W-1300</strong>, <strong>DC-01</strong>, <strong>STORAGE-A</strong>.</p>
-    </div>
+<div class="guide-section">
+    <h3>Daily Workflow</h3>
+    <ol>
+        <li>An end user emails the control team about a broken or faulty asset.</li>
+        <li>Open SAIL → <strong>Equipment Catalog</strong> or <strong>Manage Assets</strong> → find and click the affected asset.</li>
+        <li>Click <strong>Raise New Issue</strong> → fill in the issue category, priority, title, description, and the affected user's name and email address.</li>
+        <li>Submit. The affected user receives an email confirming the issue has been logged.</li>
+        <li>Open the new ticket → set <strong>Assigned To</strong> to the operation-team member who will fix it.</li>
+        <li>The assigned technician receives an email notification. They log in to SAIL, update the ticket status, add progress comments, and write a resolution note when the work is done.</li>
+        <li>When the technician sets the status to <strong>Resolved</strong> (with a resolution note), the affected user is automatically notified that their issue has been fixed.</li>
+    </ol>
 </div>
-{% endif %}
+
+<div class="guide-section">
+    <h3>Adding an Operation-Team Member</h3>
+    <ol>
+        <li>Go to <strong>Employees</strong> in the sidebar.</li>
+        <li>Click <strong>+ Add Employee</strong> → enter the person's name and email address. Role defaults to <em>Technician</em>.</li>
+        <li>Submit. Tell the new member their temporary password is <code>Aramco@123</code> — they will be prompted to change it on first login.</li>
+        <li>To reset a forgotten password, open the employee's edit page and click <strong>Reset password</strong>.</li>
+    </ol>
+</div>
+
+<div class="guide-section">
+    <h3>Adding a New Issue Category</h3>
+    <p>Go to <strong>Issue Categories</strong> in the sidebar → type the new category name → click <strong>Add</strong>. Use this whenever a new failure mode appears that doesn't fit an existing category (e.g. "Network port fault", "Screen damage").</p>
+</div>
+
+<div class="guide-section">
+    <h3>Asset Issue History</h3>
+    <p>Every asset has its own detail page that lists every ticket ever raised against it, including the resolution. This is the team's institutional memory — use it to spot repeat failures or patterns before escalating to procurement.</p>
+    <p>Navigate there via <strong>Equipment Catalog</strong> → model → asset tag, or directly from <strong>Manage Assets</strong>.</p>
+</div>
+
+<div class="guide-section">
+    <h3>Reports</h3>
+    <p>The <strong>Inventory Report</strong> (<code>/reports/inventory</code>) and <strong>Ticket Report</strong> (<code>/reports/tickets</code>) show weekly and monthly rollups with CSV export. Available to admins, managers, and technicians.</p>
+</div>
+
+<div class="guide-section">
+    <h3>Email Status</h3>
+    <p>The dashboard shows a green dot when outbound email is active, or a grey dot when it is not configured. If grey, set the <code>SAIL_SMTP_PASSWORD</code> environment variable to a Gmail app password and restart the server.</p>
+</div>
 {% endblock %}

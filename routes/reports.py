@@ -14,7 +14,7 @@ PERIODS = {'week': 7, 'month': 30}
 
 def _admin_only():
     if not g.user or g.user['role'] not in ('admin', 'manager', 'technician'):
-        flash('Reports are for admins and managers.', 'error')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard.index'))
     return None
 

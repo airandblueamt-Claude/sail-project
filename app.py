@@ -124,6 +124,10 @@ def create_app():
 
 
 if __name__ == '__main__':
+    import os
     app = create_app()
-    print("SAIL running at http://localhost:5555")
-    app.run(debug=True, host='0.0.0.0', port=5555)
+    debug = os.environ.get('SAIL_DEBUG', '').lower() in ('1', 'true', 'yes')
+    host = os.environ.get('SAIL_HOST', '127.0.0.1')
+    port = int(os.environ.get('SAIL_PORT', '5555'))
+    print(f"SAIL running at http://{host}:{port} (debug={debug})")
+    app.run(debug=debug, host=host, port=port)

@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SAIL{% endblock %}</title>
+    <script>
+        (function() {
+            const saved = localStorage.getItem('sail-theme');
+            if (saved) document.documentElement.setAttribute('data-theme', saved);
+        })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -96,10 +102,6 @@
             html.setAttribute('data-theme', next);
             localStorage.setItem('sail-theme', next);
         }
-        (function() {
-            const saved = localStorage.getItem('sail-theme');
-            if (saved) document.documentElement.setAttribute('data-theme', saved);
-        })();
     </script>
 </body>
 </html>
