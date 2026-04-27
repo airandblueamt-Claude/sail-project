@@ -74,7 +74,7 @@
                 <td><span class="badge badge-status-{{ a.status }}">{{ a.status|replace('_',' ') }}</span></td>
                 <td>{{ a.assigned_to_name or '-' }}</td>
                 <td>
-                    {% if model.is_bookable and a.status == 'available' %}
+                    {% if bookings_enabled and model.is_bookable and a.status == 'available' %}
                     <a href="{{ url_for('bookings.book_asset', asset_id=a.id) }}" class="btn btn-sm btn-primary">Book</a>
                     {% elif a.status != 'available' %}
                     <span class="muted">{{ a.status|replace('_',' ') }}</span>
