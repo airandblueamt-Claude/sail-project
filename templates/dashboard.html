@@ -1,102 +1,107 @@
 {% extends "base.html" %}
 {% block title %}SAIL - Dashboard{% endblock %}
 {% block content %}
+
 <div class="page-header">
-    <h2>Welcome, {{ current_user.name }}</h2>
+    <div>
+        <h2>Welcome, {{ current_user.name.split()[0] }}</h2>
+        <p class="muted">{{ stats.open_tickets }} open ticket{{ '' if stats.open_tickets == 1 else 's' }} · {{ stats.asset_counts.total }} assets tracked</p>
+    </div>
+    <div>
+        <a href="{{ url_for('tickets.new_ticket') }}" class="btn btn-primary">
+            <i data-lucide="plus"></i> Raise New Issue
+        </a>
+    </div>
 </div>
 
-<!-- ── Employee quick stats ──────────────────────────────────────────── -->
 <div class="stat-grid">
     <div class="stat-card">
-        <div class="stat-icon green"><i data-lucide="package-check"></i></div>
-        <div class="stat-body">
-            <span class="stat-value">{{ stats.available_assets }}</span>
-            <span class="stat-label">Available Assets</span>
-        </div>
+        <div class="stat-label">Open Tickets</div>
+        <div class="stat-value">{{ stats.open_tickets }}</div>
+        <a href="{{ url_for('tickets.list_tickets') }}" class="muted">View all</a>
     </div>
     <div class="stat-card">
-        <div class="stat-icon purple"><i data-lucide="ticket"></i></div>
-        <div class="stat-body">
-            <span class="stat-value">{{ stats.my_tickets }}</span>
-            <span class="stat-label">My Open Tickets</span>
-        </div>
+        <div class="stat-label">Assets Available</div>
+        <div class="stat-value">{{ stats.asset_counts.available or 0 }}</div>
+        <span class="muted">of {{ stats.asset_counts.total }}</span>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Assets In Use</div>
+        <div class="stat-value">{{ stats.asset_counts.in_use or 0 }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Unhealthy Assets</div>
+        <div class="stat-value">{{ stats.unhealthy_assets|length }}</div>
+        <span class="muted">maintenance or damaged</span>
     </div>
 </div>
 
-<!-- ── Quick actions ─────────────────────────────────────────────────── -->
-<div class="quick-actions">
-    <a href="{{ url_for('tickets.new_ticket') }}" class="action-card">
-        <i data-lucide="plus-circle"></i>
-        <span>Report an Issue</span>
-    </a>
-    <a href="{{ url_for('tickets.my_tickets') }}" class="action-card">
-        <i data-lucide="ticket"></i>
-        <span>My Tickets</span>
-    </a>
+<div class="dashboard-row" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
+
+    <div class="card">
+        <h4 style="margin-top:0">High / Critical Priority Queue</h4>
+        {% if not stats.priority_queue %}
+            <p class="muted">No high or critical priority tickets open. Nice.</p>
+        {% else %}
+        <table class="data-table compact">
+            <thead><tr><th>Ticket</th><th>Title</th><th>Asset</th><th>Priority</th></tr></thead>
+            <tbody>
+                {% for t in stats.priority_queue %}
+                <tr>
+                    <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.ticket_number }}</a></td>
+                    <td>{{ t.title }}</td>
+                    <td>{{ t.asset_tag or '—' }}</td>
+                    <td><span class="badge badge-{{ t.priority }}">{{ t.priority }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h4 style="margin-top:0">Recently Resolved</h4>
+        {% if not stats.recently_resolved %}
+            <p class="muted">Nothing resolved yet.</p>
+        {% else %}
+        <table class="data-table compact">
+            <thead><tr><th>Ticket</th><th>Title</th><th>Asset</th><th>Resolved</th></tr></thead>
+            <tbody>
+                {% for t in stats.recently_resolved %}
+                <tr>
+                    <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.ticket_number }}</a></td>
+                    <td>{{ t.title }}</td>
+                    <td>{{ t.asset_tag or '—' }}</td>
+                    <td>{{ t.resolved_at[:10] if t.resolved_at else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
 </div>
 
-<!-- ── Admin section ─────────────────────────────────────────────────── -->
-{% if is_admin %}
-<div class="section">
-    <div class="section-header">
-        <h3>Admin Overview</h3>
-    </div>
-    <div class="stat-grid">
-        <div class="stat-card accent">
-            <div class="stat-icon yellow"><i data-lucide="ticket"></i></div>
-            <div class="stat-body">
-                <span class="stat-value">{{ admin_stats.open_tickets }}</span>
-                <span class="stat-label">Open Tickets</span>
-            </div>
-        </div>
-        <div class="stat-card accent">
-            <div class="stat-icon blue"><i data-lucide="log-out"></i></div>
-            <div class="stat-body">
-                <span class="stat-value">{{ admin_stats.checked_out }}</span>
-                <span class="stat-label">Checked Out</span>
-            </div>
-        </div>
-        <div class="stat-card accent">
-            <div class="stat-icon orange"><i data-lucide="wrench"></i></div>
-            <div class="stat-body">
-                <span class="stat-value">{{ admin_stats.maintenance }}</span>
-                <span class="stat-label">In Maintenance</span>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% if admin_stats.expiring_agreements > 0 or admin_stats.expired_agreements > 0 %}
-<div class="info-banner info-banner-warning" style="margin-top:16px;">
-    <i data-lucide="file-check"></i>
-    <div>
-        <strong>Agreement Alerts:</strong>
-        {% if admin_stats.expired_agreements > 0 %}{{ admin_stats.expired_agreements }} expired{% endif %}
-        {% if admin_stats.expired_agreements > 0 and admin_stats.expiring_agreements > 0 %} · {% endif %}
-        {% if admin_stats.expiring_agreements > 0 %}{{ admin_stats.expiring_agreements }} expiring within 30 days{% endif %}
-        — <a href="{{ url_for('inventory.agreements_overview', status='expiring') }}">View All</a>
-    </div>
-</div>
-<script>lucide.createIcons();</script>
-{% endif %}
-{% endif %}
-
-<!-- ── Category breakdown ────────────────────────────────────────────── -->
-<div class="section">
-    <h3>Equipment by Category</h3>
-    <table class="data-table">
-        <thead><tr><th>Category</th><th class="num">Models</th><th class="num">Expected Units</th></tr></thead>
+<div class="card" style="margin-top:24px">
+    <h4 style="margin-top:0">Unhealthy Assets</h4>
+    {% if not stats.unhealthy_assets %}
+        <p class="muted">All assets are healthy.</p>
+    {% else %}
+    <table class="data-table compact">
+        <thead><tr><th>Tag</th><th>Model</th><th>Location</th><th>Status</th><th>Condition</th></tr></thead>
         <tbody>
-            {% for cat in categories %}
+            {% for a in stats.unhealthy_assets %}
             <tr>
-                <td><a href="{{ url_for('inventory.models', category=cat.name) }}">{{ cat.name }}</a></td>
-                <td class="num">{{ cat.models }}</td>
-                <td class="num">{{ cat.units }}</td>
+                <td><a href="{{ url_for('inventory.asset_detail', asset_id=a.id) }}">{{ a.asset_tag }}</a></td>
+                <td>{{ a.model_name }}</td>
+                <td>{{ a.label or a.code or '—' }}</td>
+                <td><span class="badge">{{ a.status }}</span></td>
+                <td>{{ a.condition }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
 </div>
 
-<script>lucide.createIcons();</script>
 {% endblock %}
