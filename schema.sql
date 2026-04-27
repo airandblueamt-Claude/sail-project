@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS employees (
                     CHECK(role IN ('admin','manager','technician','employee')),
     password_hash   TEXT,
     is_active       INTEGER DEFAULT 1,
+    must_change_password INTEGER DEFAULT 0,
     created_at      TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_employees_badge ON employees(badge_number);

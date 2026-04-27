@@ -29,7 +29,7 @@
                 <i data-lucide="help-circle"></i> How It Works
             </a></li>
 
-            {% if current_user and current_user.role in ('admin', 'manager') %}
+            {% if current_user and current_user.role in ('admin', 'manager', 'technician') %}
             <li class="nav-divider"><span>Administration</span></li>
             <li><a href="{{ url_for('tickets.list_tickets') }}" class="{% if request.endpoint == 'tickets.list_tickets' %}active{% endif %}">
                 <i data-lucide="list-checks"></i> All Tickets

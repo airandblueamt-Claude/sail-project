@@ -6,7 +6,7 @@
         <a href="{{ url_for('inventory.models') }}" class="breadcrumb">Equipment</a>
         <h2>{{ model.name }}</h2>
     </div>
-    {% if current_user.role in ('admin', 'manager') %}
+    {% if current_user.role in ('admin', 'manager', 'technician') %}
     <div class="header-actions">
         <a href="{{ url_for('inventory.register_asset', model_id=model.id) }}" class="btn btn-primary">+ Register Asset</a>
         <a href="{{ url_for('inventory.edit_model', model_id=model.id) }}" class="btn">Edit Model</a>
@@ -78,7 +78,7 @@
     {% else %}
     <div class="empty-state">
         <i data-lucide="package-open"></i>
-        {% if current_user.role in ('admin', 'manager') %}
+        {% if current_user.role in ('admin', 'manager', 'technician') %}
         <p>No assets registered yet for this model.</p>
         <a href="{{ url_for('inventory.register_asset', model_id=model.id) }}" class="btn btn-primary" style="margin-top:12px">Register First Asset</a>
         {% else %}

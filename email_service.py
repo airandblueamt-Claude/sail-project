@@ -129,6 +129,34 @@ def notify_affected_user(ticket, kind):
     send_email(email, subject, _base_html(body_html))
 
 
+def notify_ticket_assigned(ticket, assignee_email, assigner_name=None):
+    """Email an operation-team member when a ticket is assigned to them.
+
+    `ticket` must include: ticket_number, title, description, priority,
+    asset_tag, equipment_name. No-op if assignee_email is blank.
+    """
+    if not assignee_email:
+        return
+
+    asset_label = f"{ticket.get('asset_tag', '')} — {ticket.get('equipment_name', '')}".strip(" —")
+    subject = f"Ticket #{ticket['ticket_number']} assigned to you: {ticket['title']}"
+    by_line = f"<p>Assigned by {assigner_name}.</p>" if assigner_name else ""
+    body_html = f"""
+    <p>Hi,</p>
+    <p>Ticket <strong>#{ticket['ticket_number']}</strong> has been assigned
+       to you.</p>
+    <p><strong>Asset:</strong> {asset_label}<br>
+       <strong>Priority:</strong> {ticket.get('priority', 'medium').upper()}<br>
+       <strong>Issue:</strong> {ticket['title']}</p>
+    <p><strong>Reported issue:</strong><br>
+       {(ticket.get('description') or '').replace(chr(10), '<br>')}</p>
+    {by_line}
+    <p>Open the ticket in SAIL to update its status, add comments, or write
+       the resolution when you are done.</p>
+    """
+    send_email(assignee_email, subject, _base_html(body_html))
+
+
 def notify_ticket_update(ticket, user_email, update_type, updater_name=None):
     """Notify ticket submitter of status change or comment."""
     if not user_email:

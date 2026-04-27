@@ -105,7 +105,7 @@ def model_detail(model_id):
 @inventory_bp.route('/all')
 def all_models():
     """Admin view: full inventory including infrastructure."""
-    if g.user['role'] not in ('admin', 'manager'):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard.index'))
 
@@ -156,7 +156,7 @@ def all_models():
 
 @inventory_bp.route('/new', methods=['GET', 'POST'])
 def new_model():
-    if g.user['role'] not in ('admin', 'manager'):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
         flash('Access denied.', 'error')
         return redirect(url_for('inventory.models'))
 
@@ -205,7 +205,7 @@ def new_model():
 
 @inventory_bp.route('/<int:model_id>/edit', methods=['GET', 'POST'])
 def edit_model(model_id):
-    if g.user['role'] not in ('admin', 'manager'):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
         flash('Access denied.', 'error')
         return redirect(url_for('inventory.models'))
 
@@ -250,7 +250,7 @@ def edit_model(model_id):
 
 @inventory_bp.route('/<int:model_id>/delete', methods=['POST'])
 def delete_model(model_id):
-    if g.user['role'] not in ('admin', 'manager'):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
         flash('Access denied.', 'error')
         return redirect(url_for('inventory.models'))
 
@@ -272,7 +272,7 @@ def delete_model(model_id):
 
 @inventory_bp.route('/assets')
 def manage_assets():
-    if g.user['role'] not in ('admin', 'manager'):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard.index'))
 
@@ -328,7 +328,7 @@ def asset_detail(asset_id):
 
 @inventory_bp.route('/assets/register/<int:model_id>', methods=['GET', 'POST'])
 def register_asset(model_id):
-    if g.user['role'] not in ('admin', 'manager'):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard.index'))
 
@@ -389,7 +389,7 @@ def register_asset(model_id):
 
 @inventory_bp.route('/locations/add', methods=['POST'])
 def add_location():
-    if g.user['role'] not in ('admin', 'manager'):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard.index'))
 

@@ -1,5 +1,6 @@
 """Employees — register and manage staff."""
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+from werkzeug.security import generate_password_hash
 from database import get_db, log_audit
 
 employees_bp = Blueprint('employees', __name__)
@@ -63,11 +64,14 @@ def new_employee():
                     return redirect(url_for('employees.new_employee'))
 
             cur = conn.execute("""
-                INSERT INTO employees (name, badge_number, email, phone, role, department_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (name, badge, email, phone, role, dept_id))
+                INSERT INTO employees (name, badge_number, email, phone, role,
+                                       department_id, password_hash,
+                                       must_change_password, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)
+            """, (name, badge, email, phone, role, dept_id,
+                  generate_password_hash('Aramco@123')))
             log_audit(conn, 'employees', cur.lastrowid, 'create')
-            flash(f'Employee {name} added.', 'success')
+            flash(f'{name} added. Initial password is "Aramco@123" — they will be prompted to change it on first login.', 'success')
             return redirect(url_for('employees.list_employees'))
 
         departments = conn.execute(

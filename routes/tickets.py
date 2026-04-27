@@ -1,7 +1,7 @@
 """Tickets — maintenance, moves, requests, incidents."""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g
 from database import get_db, log_audit
-from email_service import notify_ticket_created, notify_ticket_update, notify_affected_user
+from email_service import notify_ticket_created, notify_ticket_update, notify_affected_user, notify_ticket_assigned
 
 tickets_bp = Blueprint('tickets', __name__)
 
@@ -226,6 +226,26 @@ def update_ticket(ticket_id):
                    resolution=?, updated_at=datetime('now') {extra}
             WHERE id=?
         """, params + [ticket_id])
+
+        # If the assignee changed, notify the new assignee.
+        if new_assignee != old['assigned_to'] and new_assignee:
+            log_audit(conn, 'tickets', ticket_id, 'update',
+                      'assigned_to', old['assigned_to'], new_assignee,
+                      changed_by=g.user['id'])
+            assignee = conn.execute(
+                "SELECT email FROM employees WHERE id=?", (new_assignee,)
+            ).fetchone()
+            if assignee and assignee['email']:
+                assigned_ticket = conn.execute("""
+                    SELECT t.ticket_number, t.title, t.description, t.priority,
+                           a.asset_tag, em.name AS equipment_name
+                    FROM tickets t
+                    LEFT JOIN assets a ON t.asset_id = a.id
+                    LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
+                    WHERE t.id = ?
+                """, (ticket_id,)).fetchone()
+                notify_ticket_assigned(dict(assigned_ticket),
+                                        assignee['email'], g.user['name'])
 
         if new_status != old['status']:
             log_audit(conn, 'tickets', ticket_id, 'status_change',

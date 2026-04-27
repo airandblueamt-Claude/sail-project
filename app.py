@@ -33,6 +33,12 @@ def create_app():
         if not g.user and request.endpoint and request.endpoint not in public:
             return redirect(url_for('login'))
 
+        # If logged-in user must change password, lock them to change_password + logout.
+        if g.user and g.user.get('must_change_password') and request.endpoint not in (
+                'change_password', 'logout', 'static'):
+            flash('Please set a new password before continuing.', 'info')
+            return redirect(url_for('change_password'))
+
     @app.context_processor
     def inject_user():
         return dict(current_user=g.user)
@@ -90,7 +96,8 @@ def create_app():
                         error = 'Current password is incorrect.'
                     else:
                         conn.execute(
-                            "UPDATE employees SET password_hash = ? WHERE id = ?",
+                            "UPDATE employees SET password_hash = ?, "
+                            "must_change_password = 0 WHERE id = ?",
                             (generate_password_hash(new1), g.user['id']))
                         flash('Password updated.', 'success')
                         return redirect(url_for('dashboard.index'))
