@@ -19,9 +19,10 @@
             <th>Equipment</th>
             <th>Category</th>
             <th>Serial</th>
-            <th>Location</th>
-            <th>Condition</th>
             <th>Status</th>
+            <th>Location</th>
+            <th>Holder</th>
+            <th>Condition</th>
         </tr>
     </thead>
     <tbody>
@@ -30,10 +31,11 @@
             <td><a href="{{ url_for('inventory.asset_detail', asset_id=a.id) }}"><strong>{{ a.asset_tag }}</strong></a></td>
             <td>{{ a.eq_name }}</td>
             <td><span class="badge badge-cat">{{ a.category_name }}</span></td>
-            <td>{{ a.serial_number or '-' }}</td>
-            <td>{{ a.location_code or '-' }}</td>
-            <td><span class="badge badge-{{ a.condition }}">{{ a.condition }}</span></td>
+            <td>{{ a.serial_number or '—' }}</td>
             <td><span class="badge badge-status-{{ a.status }}">{{ a.status|replace('_',' ') }}</span></td>
+            <td>{{ a.location_code or '—' }}</td>
+            <td>{{ a.assigned_to_name or a.holder_name or '—' }}</td>
+            <td><span class="badge badge-{{ a.condition }}">{{ a.condition }}</span></td>
         </tr>
         {% endfor %}
     </tbody>
