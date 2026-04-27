@@ -14,3 +14,6 @@ SMTP_PASSWORD = os.environ.get("SAIL_SMTP_PASSWORD", "YOUR_APP_PASSWORD_HERE")
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 APP_URL = "http://localhost:5555"
+
+# ── Feature flags ───────────────────────────────────────────────────
+BOOKINGS_ENABLED = False

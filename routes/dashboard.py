@@ -1,6 +1,7 @@
 """Dashboard — role-aware landing page."""
 from flask import Blueprint, render_template, g
 from database import get_db
+from config import BOOKINGS_ENABLED
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -31,14 +32,18 @@ def index():
         ).fetchone()[0]
 
         # My bookings
-        stats['my_active'] = conn.execute(
-            "SELECT COUNT(*) FROM bookings WHERE requested_by=? "
-            "AND status IN ('approved','checked_out')", (user['id'],)
-        ).fetchone()[0]
-        stats['my_pending'] = conn.execute(
-            "SELECT COUNT(*) FROM bookings WHERE requested_by=? AND status='pending'",
-            (user['id'],)
-        ).fetchone()[0]
+        if BOOKINGS_ENABLED:
+            stats['my_active'] = conn.execute(
+                "SELECT COUNT(*) FROM bookings WHERE requested_by=? "
+                "AND status IN ('approved','checked_out')", (user['id'],)
+            ).fetchone()[0]
+            stats['my_pending'] = conn.execute(
+                "SELECT COUNT(*) FROM bookings WHERE requested_by=? AND status='pending'",
+                (user['id'],)
+            ).fetchone()[0]
+        else:
+            stats['my_active'] = 0
+            stats['my_pending'] = 0
 
         # My tickets
         stats['my_tickets'] = conn.execute(
@@ -47,24 +52,30 @@ def index():
         ).fetchone()[0]
 
         # My current checkouts
-        my_checkouts = conn.execute("""
-            SELECT b.*, a.asset_tag, em.name as eq_name, em.brand,
-                   l.code as location_code
-            FROM bookings b
-            JOIN assets a ON b.asset_id = a.id
-            JOIN equipment_models em ON a.equipment_model_id = em.id
-            LEFT JOIN locations l ON a.location_id = l.id
-            WHERE b.requested_by = ? AND b.status IN ('approved','checked_out')
-            ORDER BY b.booked_from
-        """, (user['id'],)).fetchall()
+        if BOOKINGS_ENABLED:
+            my_checkouts = conn.execute("""
+                SELECT b.*, a.asset_tag, em.name as eq_name, em.brand,
+                       l.code as location_code
+                FROM bookings b
+                JOIN assets a ON b.asset_id = a.id
+                JOIN equipment_models em ON a.equipment_model_id = em.id
+                LEFT JOIN locations l ON a.location_id = l.id
+                WHERE b.requested_by = ? AND b.status IN ('approved','checked_out')
+                ORDER BY b.booked_from
+            """, (user['id'],)).fetchall()
+        else:
+            my_checkouts = []
 
         # Admin stats
         admin_stats = {}
         pending_approvals = []
         if is_admin:
-            admin_stats['pending_bookings'] = conn.execute(
-                "SELECT COUNT(*) FROM bookings WHERE status='pending'"
-            ).fetchone()[0]
+            if BOOKINGS_ENABLED:
+                admin_stats['pending_bookings'] = conn.execute(
+                    "SELECT COUNT(*) FROM bookings WHERE status='pending'"
+                ).fetchone()[0]
+            else:
+                admin_stats['pending_bookings'] = 0
             admin_stats['open_tickets'] = conn.execute(
                 "SELECT COUNT(*) FROM tickets WHERE status IN ('open','in_progress','waiting')"
             ).fetchone()[0]
@@ -75,17 +86,20 @@ def index():
                 "SELECT COUNT(*) FROM assets WHERE status='maintenance'"
             ).fetchone()[0]
 
-            pending_approvals = conn.execute("""
-                SELECT b.*, a.asset_tag, em.name as eq_name, em.brand,
-                       e.name as requester_name
-                FROM bookings b
-                JOIN assets a ON b.asset_id = a.id
-                JOIN equipment_models em ON a.equipment_model_id = em.id
-                JOIN employees e ON b.requested_by = e.id
-                WHERE b.status = 'pending'
-                ORDER BY b.created_at
-                LIMIT 10
-            """).fetchall()
+            if BOOKINGS_ENABLED:
+                pending_approvals = conn.execute("""
+                    SELECT b.*, a.asset_tag, em.name as eq_name, em.brand,
+                           e.name as requester_name
+                    FROM bookings b
+                    JOIN assets a ON b.asset_id = a.id
+                    JOIN equipment_models em ON a.equipment_model_id = em.id
+                    JOIN employees e ON b.requested_by = e.id
+                    WHERE b.status = 'pending'
+                    ORDER BY b.created_at
+                    LIMIT 10
+                """).fetchall()
+            else:
+                pending_approvals = []
 
             admin_stats['expiring_agreements'] = conn.execute(
                 "SELECT COUNT(*) FROM equipment_agreements "

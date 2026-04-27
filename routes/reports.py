@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, g, fla
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from database import get_db
+from config import BOOKINGS_ENABLED
 
 reports_bp = Blueprint('reports', __name__)
 
@@ -91,43 +92,49 @@ def inventory():
             'new_assets': conn.execute(
                 "SELECT COUNT(*) FROM assets WHERE created_at >= ? AND created_at < ?",
                 (start, end)).fetchone()[0],
-            'bookings_created': conn.execute(
+        }
+        if BOOKINGS_ENABLED:
+            history['bookings_created'] = conn.execute(
                 "SELECT COUNT(*) FROM bookings WHERE created_at >= ? AND created_at < ?",
-                (start, end)).fetchone()[0],
-            'checkouts': conn.execute(
+                (start, end)).fetchone()[0]
+            history['checkouts'] = conn.execute(
                 "SELECT COUNT(*) FROM bookings "
                 "WHERE checkout_date IS NOT NULL AND checkout_date >= ? AND checkout_date < ?",
-                (start, end)).fetchone()[0],
-            'returns': conn.execute(
+                (start, end)).fetchone()[0]
+            history['returns'] = conn.execute(
                 "SELECT COUNT(*) FROM bookings "
                 "WHERE actual_return IS NOT NULL AND actual_return >= ? AND actual_return < ?",
-                (start, end)).fetchone()[0],
-            'rejected': conn.execute(
+                (start, end)).fetchone()[0]
+            history['rejected'] = conn.execute(
                 "SELECT COUNT(*) FROM bookings "
                 "WHERE status='rejected' AND updated_at >= ? AND updated_at < ?",
-                (start, end)).fetchone()[0],
-        }
-
-        top_models = conn.execute("""
-            SELECT em.name as eq_name, em.brand, c.name as category, COUNT(*) as bookings
-            FROM bookings b
-            JOIN assets a ON b.asset_id = a.id
-            JOIN equipment_models em ON a.equipment_model_id = em.id
-            JOIN categories c ON em.category_id = c.id
-            WHERE b.created_at >= ? AND b.created_at < ?
-            GROUP BY em.id ORDER BY bookings DESC LIMIT 10
-        """, (start, end)).fetchall()
-
-        recent_bookings = conn.execute("""
-            SELECT b.id, b.status, b.booked_from, b.booked_to, b.created_at,
-                   a.asset_tag, em.name as eq_name, em.brand, e.name as requester_name
-            FROM bookings b
-            JOIN assets a ON b.asset_id = a.id
-            JOIN equipment_models em ON a.equipment_model_id = em.id
-            JOIN employees e ON b.requested_by = e.id
-            WHERE b.created_at >= ? AND b.created_at < ?
-            ORDER BY b.created_at DESC LIMIT 50
-        """, (start, end)).fetchall()
+                (start, end)).fetchone()[0]
+            top_models = conn.execute("""
+                SELECT em.name as eq_name, em.brand, c.name as category, COUNT(*) as bookings
+                FROM bookings b
+                JOIN assets a ON b.asset_id = a.id
+                JOIN equipment_models em ON a.equipment_model_id = em.id
+                JOIN categories c ON em.category_id = c.id
+                WHERE b.created_at >= ? AND b.created_at < ?
+                GROUP BY em.id ORDER BY bookings DESC LIMIT 10
+            """, (start, end)).fetchall()
+            recent_bookings = conn.execute("""
+                SELECT b.id, b.status, b.booked_from, b.booked_to, b.created_at,
+                       a.asset_tag, em.name as eq_name, em.brand, e.name as requester_name
+                FROM bookings b
+                JOIN assets a ON b.asset_id = a.id
+                JOIN equipment_models em ON a.equipment_model_id = em.id
+                JOIN employees e ON b.requested_by = e.id
+                WHERE b.created_at >= ? AND b.created_at < ?
+                ORDER BY b.created_at DESC LIMIT 50
+            """, (start, end)).fetchall()
+        else:
+            history['bookings_created'] = 0
+            history['checkouts'] = 0
+            history['returns'] = 0
+            history['rejected'] = 0
+            top_models = []
+            recent_bookings = []
 
         agreements_expiring = conn.execute("""
             SELECT ea.agreement_type, ea.provider, ea.end_date, em.name as eq_name, em.brand

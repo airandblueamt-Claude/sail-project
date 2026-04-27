@@ -19,12 +19,14 @@
             <li><a href="{{ url_for('dashboard.index') }}" class="{% if request.endpoint == 'dashboard.index' %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i> Dashboard
             </a></li>
+            {% if bookings_enabled %}
             <li><a href="{{ url_for('inventory.models') }}" class="{% if request.endpoint == 'inventory.models' %}active{% endif %}">
                 <i data-lucide="search"></i> Browse &amp; Book
             </a></li>
             <li><a href="{{ url_for('bookings.my_bookings') }}" class="{% if request.endpoint == 'bookings.my_bookings' %}active{% endif %}">
                 <i data-lucide="calendar-check"></i> My Bookings
             </a></li>
+            {% endif %}
             <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if request.endpoint == 'tickets.my_tickets' %}active{% endif %}">
                 <i data-lucide="ticket"></i> My Tickets
             </a></li>
@@ -34,9 +36,11 @@
 
             {% if current_user and current_user.role in ('admin', 'manager') %}
             <li class="nav-divider"><span>Administration</span></li>
+            {% if bookings_enabled %}
             <li><a href="{{ url_for('bookings.admin_queue') }}" class="{% if request.endpoint == 'bookings.admin_queue' %}active{% endif %}">
                 <i data-lucide="clipboard-check"></i> Booking Approvals
             </a></li>
+            {% endif %}
             <li><a href="{{ url_for('tickets.list_tickets') }}" class="{% if request.endpoint == 'tickets.list_tickets' %}active{% endif %}">
                 <i data-lucide="list-checks"></i> All Tickets
             </a></li>

@@ -1,9 +1,16 @@
 """Bookings — employee booking flow + admin approval queue."""
-from flask import Blueprint, render_template, request, redirect, url_for, flash, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, g, abort
 from database import get_db, log_audit
 from email_service import notify_booking_submitted, notify_booking_status
+from config import BOOKINGS_ENABLED
 
 bookings_bp = Blueprint('bookings', __name__)
+
+
+@bookings_bp.before_request
+def gate_bookings():
+    if not BOOKINGS_ENABLED:
+        abort(404)
 
 
 @bookings_bp.route('/mine')

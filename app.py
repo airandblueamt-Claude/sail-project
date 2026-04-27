@@ -34,8 +34,9 @@ def create_app():
             return redirect(url_for('login'))
 
     @app.context_processor
-    def inject_user():
-        return dict(current_user=g.user)
+    def inject_globals():
+        from config import BOOKINGS_ENABLED
+        return dict(current_user=g.user, bookings_enabled=BOOKINGS_ENABLED)
 
     # ── Login (email + password) ────────────────────────────────────
     @app.route('/login', methods=['GET', 'POST'])

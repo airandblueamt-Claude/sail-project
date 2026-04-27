@@ -82,6 +82,7 @@
             <div class="stat-icon blue"><i data-lucide="plus-circle"></i></div>
             <div class="stat-body"><span class="stat-value">{{ history.new_assets }}</span><span class="stat-label">New Assets Registered</span></div>
         </div>
+        {% if bookings_enabled %}
         <div class="stat-card">
             <div class="stat-icon purple"><i data-lucide="calendar-plus"></i></div>
             <div class="stat-body"><span class="stat-value">{{ history.bookings_created }}</span><span class="stat-label">Bookings Created</span></div>
@@ -98,10 +99,11 @@
             <div class="stat-icon red"><i data-lucide="x-circle"></i></div>
             <div class="stat-body"><span class="stat-value">{{ history.rejected }}</span><span class="stat-label">Rejected</span></div>
         </div>
+        {% endif %}
     </div>
 </div>
 
-{% if top_models %}
+{% if bookings_enabled and top_models %}
 <div class="section">
     <h3>Most-Booked Equipment (in period)</h3>
     <table class="data-table">
@@ -119,7 +121,7 @@
 </div>
 {% endif %}
 
-{% if recent_bookings %}
+{% if bookings_enabled and recent_bookings %}
 <div class="section">
     <h3>Bookings Created in Period</h3>
     <table class="data-table">
