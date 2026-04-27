@@ -19,8 +19,7 @@ python import_assets_v3.py        # loads "Assets Inventory _20-04-2026-Tool (V3
 python app.py                     # serves http://localhost:5555
 ```
 
-- First-time admin: register via `/register`, then flip your role with
-  `UPDATE employees SET role='admin' WHERE email='…'` against `sail.db`.
+- The four control-team accounts are seeded by `init_db.py` with password `Aramco@123` and role `admin`. There is no public `/register` route; admins create new users from the Employees page. New users should change their password at `/account/password` after first login.
 - Email notifications need `SAIL_SMTP_PASSWORD` (Gmail app password) in the env; without it the app runs fine but silently skips sending.
 - `python backup_db.py` — timestamped copy in `backups/`, keeps the last 10.
 
@@ -41,7 +40,7 @@ There is no test suite, linter, or build step configured.
 | `reports_bp` | `/reports` | Admin-only weekly/monthly rollups for inventory & tickets, with CSV export |
 | `help_bp` | `/help` | In-app guide |
 
-Auth is session-based (email + password). `before_request` loads the user from `session['user_id']` into `g.user` and redirects unauthenticated requests to `/login` except for `login`, `register`, and `static`.
+Auth is session-based (email + password, validated against `employees.password_hash` via `werkzeug.security`). `before_request` loads the user from `session['user_id']` into `g.user` and redirects unauthenticated requests to `/login` except for `login` and `static`.
 
 ### Data model — the core distinction
 
