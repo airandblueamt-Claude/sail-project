@@ -20,14 +20,16 @@ End users do not log in. They send an email; the team raises the ticket on their
 
 The system has exactly one role: **team** (the four control-team accounts). All four are functionally admins. Self-registration is removed; accounts are seeded at install.
 
-| Email                     |
-|---------------------------|
-| airandblueamt@gmail.com   |
-| m.shaikh@amt-arabia.net   |
-| omar.bawadod@aramco.com   |
-| ali.almatrood@aramco.com  |
+| Email                     | Initial password |
+|---------------------------|------------------|
+| airandblueamt@gmail.com   | `Aramco@123`     |
+| m.shaikh@amt-arabia.net   | `Aramco@123`     |
+| omar.bawadod@aramco.com   | `Aramco@123`     |
+| ali.almatrood@aramco.com  | `Aramco@123`     |
 
-(For schema compatibility these accounts are stored with `role='admin'` — the existing role check unblocks every screen for them. No employee role is used.)
+All four accounts ship with the same seed password (`Aramco@123`). This is convenient for a 4-user team but is a known weakness: anyone who reads this spec or the seed script can log in until the passwords are rotated. The expectation is that each user changes their password after first login (see 4.2).
+
+For schema compatibility these accounts are stored with `role='admin'` — the existing role check unblocks every screen for them. No employee role is used.
 
 ## 3 — Non-goals
 
@@ -42,18 +44,31 @@ The system has exactly one role: **team** (the four control-team accounts). All 
 
 ### 4.1 Schema delta
 
-Two nullable columns added to the existing `tickets` table:
+Two nullable columns added to the existing `tickets` table, and one to `employees`:
 
 ```sql
-ALTER TABLE tickets ADD COLUMN affected_user_name  TEXT;
-ALTER TABLE tickets ADD COLUMN affected_user_email TEXT;
+ALTER TABLE tickets   ADD COLUMN affected_user_name  TEXT;
+ALTER TABLE tickets   ADD COLUMN affected_user_email TEXT;
+ALTER TABLE employees ADD COLUMN password_hash       TEXT;
 ```
 
-Why nullable: older tickets do not have these values, and a team member may legitimately raise a ticket with no specific affected user (preventive maintenance, asset audit, etc.). When the email field is blank, the affected-user notification is simply skipped.
+`tickets` columns are nullable because older tickets do not have these values, and a team member may legitimately raise a ticket with no specific affected user (preventive maintenance, asset audit, etc.). When the email field is blank, the affected-user notification is simply skipped.
+
+`employees.password_hash` is nullable in the schema for migration safety, but the login route requires it: an account with no hash cannot sign in. The seed script populates the hash for all four control-team accounts.
 
 No other schema changes. `assets`, `equipment_models`, `categories`, `locations`, `bookings`, `ticket_comments`, `audit_log` are all left intact.
 
-### 4.2 Core flow
+### 4.2 Authentication
+
+Login becomes **email + password** (today the app is email-only).
+
+- The login form gains a password field. The route looks up the employee by email and validates against `password_hash` using `werkzeug.security.check_password_hash`. No hash, wrong password, or inactive (`is_active = 0`) account → generic "invalid credentials" error. Sessions stay as they are (`session['user_id']`).
+- Hashing uses `werkzeug.security.generate_password_hash` (PBKDF2-SHA256, the Werkzeug default — no extra dependency since Flask already pulls Werkzeug). Plain passwords are never stored or logged.
+- A new route `/account/password` lets a logged-in user change their own password. The form requires the current password (validated) plus the new password twice. On success, the new hash is written and the session is preserved.
+- The seed script (see 4.1) calls `generate_password_hash('Aramco@123')` once and writes the same hash to all four accounts. The `Aramco@123` literal lives only in the seed script — it is never read from a config file, env var, or DB.
+- **No "forgot password" flow.** With four users in one room, password recovery is "ask the admin to update your hash" or rerun the seed script.
+
+### 4.3 Core flow
 
 ```
 End user emails the team about any asset issue (e.g. "display in CR3 is black",
@@ -79,11 +94,11 @@ Team works the ticket: comments, status changes (open → in_progress → resolv
    email_service.notify_affected_user(ticket, kind='resolved')
             │
             ▼
-Next time anyone opens that TV's asset page, the ticket appears in
+Next time anyone opens that asset's detail page, the ticket appears in
 its "Issue History" section — title, status, resolution, all comments.
 ```
 
-### 4.3 Asset detail page (the load-bearing screen)
+### 4.4 Asset detail page (the load-bearing screen)
 
 `/inventory/asset/<id>` — visible to all team members. Three sections:
 
@@ -93,7 +108,7 @@ its "Issue History" section — title, status, resolution, all comments.
 
 This page replaces the prior "browse and book" affordance. There is no longer any reason to filter the asset list by `is_bookable`; the team needs to see everything.
 
-### 4.4 Ticket form
+### 4.5 Ticket form
 
 `/tickets/new` accepts an optional `?asset_id=` query param. Fields:
 
@@ -107,14 +122,14 @@ This page replaces the prior "browse and book" affordance. There is no longer an
 
 On submit: insert the ticket, audit-log the creation, send the "ticket received" email to the affected user (if email present).
 
-### 4.5 Ticket workflow (mostly unchanged)
+### 4.6 Ticket workflow (mostly unchanged)
 
 The existing kanban / SLA board stays. The only behavioral additions:
 
 - When a ticket transitions to `resolved`, the team must fill in the `resolution` field (form-level required). On save, send the "your issue is resolved" email to the affected user.
 - The ticket detail page shows the affected user's name + email in the header so the team can reach them by phone if needed.
 
-### 4.6 Dashboard
+### 4.7 Dashboard
 
 Single role, single dashboard. Tiles:
 
@@ -123,9 +138,9 @@ Single role, single dashboard. Tiles:
 - **Recently resolved** (last 5) — quick lookback for "didn't I just fix this?"
 - **Unhealthy assets** — assets with `status = 'maintenance'` or `condition = 'damaged'`.
 
-All booking tiles are gated by the feature flag (see 4.7).
+All booking tiles are gated by the feature flag (see 4.8).
 
-### 4.7 Bookings — hidden, not deleted
+### 4.8 Bookings — hidden, not deleted
 
 A single boolean in `config.py`:
 
@@ -143,7 +158,7 @@ In `routes/dashboard.py` and `routes/reports.py` the booking SELECTs are short-c
 
 Reversibility: flip the flag back to `True` and every booking link, page, and stat returns. No deletions to undo.
 
-### 4.8 Email
+### 4.9 Email
 
 A new helper in `email_service.py`:
 
@@ -168,26 +183,33 @@ Existing internal-team notification helpers (assignment, comments) are unchanged
 - **Invalid email format** — caught by HTML5 form validation; the form rejects submission before hitting the route.
 - **Booking URL hit while flag is off** — 404 from the blueprint guard.
 - **Resolution field blank on resolve** — form rejects submission with "Resolution required when resolving a ticket."
+- **Login attempt for an account with no `password_hash`** — generic "invalid credentials" error, same as a wrong password. The system never reveals whether the email exists.
+- **Password change with wrong current password** — generic "current password is incorrect" error; new password is not written.
 
 ## 6 — Testing
 
 No automated test suite (per CLAUDE.md). Manual verification checklist, to be expanded into the implementation plan:
 
-1. Fresh DB → seed inserts the four accounts, all with `role='admin'`.
+1. Fresh DB → seed inserts the four accounts, all with `role='admin'` and a `password_hash` set.
 2. `/register` is no longer reachable from the nav.
-3. Open an asset detail page → "Raise New Issue" button is visible → form pre-populates `asset_id`.
-4. Submit the form with an affected_user_email → ticket created, log shows email send (or actual send if SMTP configured).
-5. Resolve the ticket with a resolution note → second email sent to the same address.
-6. Re-open the asset's detail page → the ticket appears in Issue History with status `resolved` and the resolution text.
-7. Sidebar contains no booking links; `/bookings` returns 404.
-8. Flipping `BOOKINGS_ENABLED = True` restores everything booking-related with no other change.
+3. Login form rejects empty password, wrong password, and unknown email with the same generic error.
+4. Login with `airandblueamt@gmail.com` + `Aramco@123` → succeeds, session set, lands on dashboard.
+5. `/account/password` lets the logged-in user change their password; logging out and back in with the new password works; the old password no longer works.
+6. Open an asset detail page → "Raise New Issue" button is visible → form pre-populates `asset_id`.
+7. Submit the form with an affected_user_email → ticket created, log shows email send (or actual send if SMTP configured).
+8. Resolve the ticket with a resolution note → second email sent to the same address.
+9. Re-open the asset's detail page → the ticket appears in Issue History with status `resolved` and the resolution text.
+10. Sidebar contains no booking links; `/bookings` returns 404.
+11. Flipping `BOOKINGS_ENABLED = True` restores everything booking-related with no other change.
 
 ## 7 — Files touched
 
-- `schema.sql` — add the two `tickets` columns.
-- `init_db.py` (or a new `seed_users.py`) — insert the four accounts as `role='admin'`.
+- `schema.sql` — add the two `tickets` columns and the `employees.password_hash` column.
+- `init_db.py` (or a new `seed_users.py`) — insert the four accounts as `role='admin'` with `generate_password_hash('Aramco@123')`.
 - `config.py` — `BOOKINGS_ENABLED = False`.
-- `app.py` — context processor for `bookings_enabled`; remove the public `/register` route from the nav.
+- `app.py` — context processor for `bookings_enabled`; remove the public `/register` route; rewrite the login route to validate `password_hash`; add `/account/password` for password changes.
+- `templates/login.html` — add password field.
+- `templates/account/password.html` — new template for the password-change form.
 - `routes/bookings.py` — `before_request` 404 guard.
 - `routes/inventory.py` — asset detail page with issue-history section.
 - `routes/tickets.py` — accept `?asset_id=` query param; require `resolution` on resolve transition; trigger affected-user emails.
@@ -203,4 +225,4 @@ No automated test suite (per CLAUDE.md). Manual verification checklist, to be ex
 
 ## 8 — Reversibility
 
-The booking module is gated, not deleted. The two new ticket columns are nullable. Reverting this entire spec is `git revert` of the implementation commits — no destructive schema migrations.
+The booking module is gated, not deleted. The new `tickets` and `employees` columns are all nullable. Reverting this entire spec is `git revert` of the implementation commits — no destructive schema migrations. (Reverting the auth change does mean every account effectively becomes login-less again; rotating credentials beforehand is the safer reversal path.)
