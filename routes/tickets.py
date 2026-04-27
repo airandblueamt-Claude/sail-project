@@ -251,18 +251,23 @@ def update_ticket(ticket_id):
             log_audit(conn, 'tickets', ticket_id, 'status_change',
                       'status', old['status'], new_status,
                       changed_by=g.user['id'])
-            # Email the original ticket submitter (existing behavior).
-            submitter = conn.execute(
-                "SELECT email FROM employees WHERE id=?", (old['submitted_by'],)
-            ).fetchone()
-            if submitter and submitter['email']:
-                updated_ticket = conn.execute(
-                    "SELECT * FROM tickets WHERE id=?", (ticket_id,)
-                ).fetchone()
-                notify_ticket_update(dict(updated_ticket), submitter['email'],
-                                     'status_change', g.user['name'])
 
-            # NEW: when resolved, also email the affected end user.
+            # Notify the original ticket creator only when the ticket is
+            # resolved or closed — mid-flight transitions would just be
+            # noise. Skip if the creator is the one making the change
+            # (no point emailing yourself).
+            if new_status in ('resolved', 'closed') and old['submitted_by'] != g.user['id']:
+                submitter = conn.execute(
+                    "SELECT email FROM employees WHERE id=?", (old['submitted_by'],)
+                ).fetchone()
+                if submitter and submitter['email']:
+                    updated_ticket = conn.execute(
+                        "SELECT * FROM tickets WHERE id=?", (ticket_id,)
+                    ).fetchone()
+                    notify_ticket_update(dict(updated_ticket), submitter['email'],
+                                         'status_change', g.user['name'])
+
+            # Also email the affected end user when the ticket is resolved.
             if new_status == 'resolved':
                 resolved = conn.execute("""
                     SELECT t.ticket_number, t.title, t.description, t.resolution,
