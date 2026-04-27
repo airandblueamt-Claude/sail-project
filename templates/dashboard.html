@@ -51,7 +51,7 @@
                     <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.ticket_number }}</a></td>
                     <td>{{ t.title }}</td>
                     <td>{{ t.asset_tag or '—' }}</td>
-                    <td><span class="badge badge-{{ t.priority }}">{{ t.priority }}</span></td>
+                    <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority }}</span></td>
                 </tr>
                 {% endfor %}
             </tbody>

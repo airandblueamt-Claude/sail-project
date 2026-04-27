@@ -1,5 +1,5 @@
 """Dashboard — single-role landing page for the control team."""
-from flask import Blueprint, render_template, g
+from flask import Blueprint, render_template
 from database import get_db
 
 dashboard_bp = Blueprint('dashboard', __name__)
