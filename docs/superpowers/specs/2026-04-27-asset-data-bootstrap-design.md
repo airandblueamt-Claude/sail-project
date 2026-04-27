@@ -76,8 +76,8 @@ No other schema changes.
 
 | Excel column | DB destination | Notes |
 |---|---|---|
-| `Product_ID(SAIL ID)` | `assets.asset_tag` | `SAIL-{id}` (e.g. `16038` → `SAIL-16038`) |
-| `Sequence` | fallback for missing IDs | 3 rows have no Product_ID → `SAIL-NEW-{sequence}` |
+| `Product_ID(SAIL ID)` | `assets.asset_tag` | Generated tag — see §5.2 (the V3 sheet has 11 rows w/o PID, 3 duplicate PIDs, and 1 row w/o either field) |
+| `Sequence` | preserved on the asset row in `notes` only | Not used for tag generation — sequences are duplicated across rows in the V3 data |
 | `Category` | `categories.name` → `equipment_models.category_id` | Normalize: `MONITOR` → `Monitor`, `Smart board` → `Smart Board` |
 | `Item Name` | `equipment_models.name` | Group key with category; 31 distinct (cat, item) pairs |
 | `Description` | `equipment_models.specifications` | NULL when equal to `Item Name` |
@@ -89,6 +89,20 @@ No other schema changes.
 | `Availability` | `assets.condition` | `yes`/`1` → `good`; `damage` → `damaged`; `no` → `fair`; blank → `good` |
 | `Remark` | `assets.remark` + drives `assets.status` | See §6 |
 | `Date From`, `Date To`, `phone`, `Email` | `assets.notes` | Sparse (~3 rows); folded into notes as `key: value` lines |
+
+### 5.2 Asset-tag generation
+
+`assets.asset_tag` is `UNIQUE NOT NULL`. The V3 sheet's Product_IDs are not reliably unique (216 unique PIDs across 219 PID-bearing rows; 11 rows have no PID at all). The importer guarantees uniqueness with a deterministic, traceable scheme tied to the Excel row number (1-based, so the first data row is row 2):
+
+| Condition | `asset_tag` |
+|---|---|
+| Product_ID present and unique in the sheet | `SAIL-{pid}` (e.g. `SAIL-16038`) |
+| Product_ID present but duplicated | `SAIL-{pid}-R{row}` (e.g. `SAIL-21068-R195`) — preserves the SAIL ID + Excel-row pointer so admins can reconcile |
+| Product_ID missing | `SAIL-ROW-{row}` (e.g. `SAIL-ROW-83`) |
+
+The Excel row number is stable per import (the file is the source of truth) and makes every generated tag a clickable pointer back to the spreadsheet for manual cleanup.
+
+The importer reports counts of all three categories in its DATA QUALITY block.
 
 ### 5.1 `is_bookable` defaults
 
@@ -177,7 +191,8 @@ SUMMARY
     decommissioned:  1      (NOT SAIL)
   Bookable models:   28 of 31
 DATA QUALITY
-  Rows w/o Product_ID:        3   (assigned SAIL-NEW-{sequence})
+  Rows w/o Product_ID:        11  (assigned SAIL-ROW-{excel_row})
+  Rows w/ duplicate PID:      6   (3 PIDs shared across pairs of rows; tag is SAIL-{pid}-R{row})
   Rows w/ holder badge#:      11  (kept as free text)
   Rows w/ "Found Not in App": 3   (status from holder, remark preserved)
 ```
@@ -220,6 +235,6 @@ Schema-file edits and template tweaks are git-tracked and reversible with `git c
 | External image hosts block hotlinking | Out of scope; address case-by-case after import |
 | Holder badge-numbers are stored as free text and may diverge from the future `employees` table | Acceptable for now; spec a follow-up to backfill `assigned_to` once employees are loaded |
 | Excel column order/name drift on a future V4 sheet | Importer reads by header name (not column index); a missing header fails fast with a clear error |
-| The 3 `Found Not in App` rows have no Product_ID — the synthetic `SAIL-NEW-{seq}` tags may collide with real future tags | Synthetic tags use a `NEW-` prefix that is reserved for unmatched rows; admins rename them once a real ID is assigned |
+| 11 rows have no Product_ID and 3 PIDs are duplicated across rows in V3 | Tags are generated to be unique by suffixing the Excel row number — see §5.2. Admins reconcile duplicates and rename `SAIL-ROW-*` tags once real IDs are issued |
 
 No open questions block implementation.

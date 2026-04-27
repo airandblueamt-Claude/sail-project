@@ -358,13 +358,20 @@ def normalize_item_name(raw):
     return raw.strip() if raw else None
 
 
-def derive_asset_tag(product_id, sequence):
-    """SAIL-{id} when present; SAIL-NEW-{seq} fallback for the 3 missing-ID rows."""
-    if product_id:
-        return f"SAIL-{product_id}"
-    if sequence:
-        return f"SAIL-NEW-{sequence}"
-    raise ValueError("row has neither Product_ID nor Sequence")
+def derive_asset_tag(product_id, row_num, dup_pids):
+    """
+    Per spec §5.2:
+      - unique PID         -> SAIL-{pid}
+      - duplicated PID     -> SAIL-{pid}-R{row}    (PID + Excel row for traceability)
+      - missing PID        -> SAIL-ROW-{row}
+    `dup_pids` is the set of PID values that appear on more than one row in the
+    sheet; the caller is responsible for computing it in a first pass.
+    """
+    if not product_id:
+        return f"SAIL-ROW-{row_num}"
+    if product_id in dup_pids:
+        return f"SAIL-{product_id}-R{row_num}"
+    return f"SAIL-{product_id}"
 
 
 def derive_condition(availability):
@@ -446,7 +453,12 @@ def build_notes(row):
 
 
 def read_rows(xlsx_path):
-    """Yield dicts keyed by EXPECTED_HEADERS, one per data row."""
+    """Yield (excel_row_num, dict-keyed-by-EXPECTED_HEADERS) per data row.
+
+    excel_row_num is the 1-based row number in the source sheet (the header
+    is row 1; the first data row is row 2). It is used by derive_asset_tag
+    as the deterministic uniqueness fallback (see spec §5.2).
+    """
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     if SHEET_NAME not in wb.sheetnames:
         raise SystemExit(f"sheet {SHEET_NAME!r} not found in {xlsx_path}")
@@ -460,11 +472,12 @@ def read_rows(xlsx_path):
             raise SystemExit(
                 f"missing expected header {label!r} in {xlsx_path} (row 1)"
             )
-    for raw in ws.iter_rows(min_row=2, values_only=True):
+    for row_num, raw in enumerate(ws.iter_rows(min_row=2, values_only=True),
+                                  start=2):
         # Skip totally empty rows (no Sequence AND no Category).
         if raw[idx["sequence"]] is None and raw[idx["category"]] is None:
             continue
-        yield {key: raw[i] for key, i in idx.items()}
+        yield row_num, {key: raw[i] for key, i in idx.items()}
 
 
 # ── Derivation pass (no DB) ─────────────────────────────────────────────────
@@ -472,12 +485,25 @@ def read_rows(xlsx_path):
 
 def derive_all(rows):
     """
-    Walk the rows and build the in-memory plan:
+    Walk the rows (each is (row_num, dict)) and build the in-memory plan:
       categories: set of names
       locations:  dict {code: (label, is_storage)}
       models:     dict {(category, item_name_lower): {category, name, image, specs}}
       assets:     list of asset-row dicts ready for INSERT
+
+    The walk is two-pass — the first pass identifies duplicate Product_IDs so
+    derive_asset_tag can suffix them with the Excel row number (spec §5.2).
     """
+    rows = list(rows)  # materialise so we can iterate twice
+
+    # Pass 1: count Product_IDs to find duplicates.
+    pid_counter = Counter()
+    for _row_num, row in rows:
+        pid = s(row["product_id"])
+        if pid:
+            pid_counter[pid] += 1
+    dup_pids = {pid for pid, n in pid_counter.items() if n > 1}
+
     categories = set()
     locations = {}
     models = {}
@@ -485,10 +511,12 @@ def derive_all(rows):
 
     status_counter = Counter()
     no_pid = 0
+    dup_pid_rows = 0
     badge_holders = 0
     found_not_in_app = 0
 
-    for row in rows:
+    # Pass 2: build the plan.
+    for row_num, row in rows:
         cat = normalize_category(s(row["category"]))
         item = normalize_item_name(s(row["item_name"]))
         if not cat:
@@ -519,10 +547,11 @@ def derive_all(rows):
                 m["image"] = img
 
         product_id = s(row["product_id"])
-        sequence = s(row["sequence"])
         if not product_id:
             no_pid += 1
-        asset_tag = derive_asset_tag(product_id, sequence)
+        elif product_id in dup_pids:
+            dup_pid_rows += 1
+        asset_tag = derive_asset_tag(product_id, row_num, dup_pids)
 
         holder = s(row["holder_name"])
         remark = s(row["remark"])
@@ -550,6 +579,13 @@ def derive_all(rows):
             "notes": build_notes(row),
         })
 
+    # Sanity: tags must be unique by construction. If they aren't, something
+    # in derive_asset_tag is broken.
+    tag_counter = Counter(a["asset_tag"] for a in assets)
+    duplicates = [t for t, n in tag_counter.items() if n > 1]
+    if duplicates:
+        raise RuntimeError(f"asset_tag uniqueness violation: {duplicates[:5]} ...")
+
     return {
         "categories": categories,
         "locations": locations,
@@ -557,6 +593,7 @@ def derive_all(rows):
         "assets": assets,
         "status_counter": status_counter,
         "no_pid": no_pid,
+        "dup_pid_rows": dup_pid_rows,
         "badge_holders": badge_holders,
         "found_not_in_app": found_not_in_app,
     }
@@ -586,7 +623,8 @@ def print_summary(plan):
             print(f"    {st + ':':<16} {sc[st]}")
     print(f"  Bookable models:   {bookable} of {len(models)}")
     print("DATA QUALITY")
-    print(f"  Rows w/o Product_ID:        {plan['no_pid']}   (assigned SAIL-NEW-{{sequence}})")
+    print(f"  Rows w/o Product_ID:        {plan['no_pid']}   (assigned SAIL-ROW-{{excel_row}})")
+    print(f"  Rows w/ duplicate PID:      {plan['dup_pid_rows']}   (suffixed with -R{{excel_row}})")
     print(f"  Rows w/ holder badge#:      {plan['badge_holders']}")
     print(f"  Rows w/ \"Found Not in App\": {plan['found_not_in_app']}")
 
@@ -605,7 +643,7 @@ def main():
     if not os.path.exists(args.xlsx):
         sys.exit(f"Excel not found: {args.xlsx}")
 
-    rows = list(read_rows(args.xlsx))
+    rows = list(read_rows(args.xlsx))   # list of (row_num, row_dict) tuples
     print(f"Read {len(rows)} rows from {args.xlsx}")
 
     plan = derive_all(rows)
@@ -645,7 +683,8 @@ SUMMARY
     decommissioned:  1
   Bookable models:   28 of 31
 DATA QUALITY
-  Rows w/o Product_ID:        3   (assigned SAIL-NEW-{sequence})
+  Rows w/o Product_ID:        11   (assigned SAIL-ROW-{excel_row})
+  Rows w/ duplicate PID:      6    (suffixed with -R{excel_row})
   Rows w/ holder badge#:      11
   Rows w/ "Found Not in App": 3
 
