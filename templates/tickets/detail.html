@@ -16,6 +16,18 @@
             <dt>Priority</dt><dd><span class="badge badge-priority-{{ ticket.priority }}">{{ ticket.priority }}</span></dd>
             <dt>Status</dt><dd><span class="badge badge-status-{{ ticket.status }}">{{ ticket.status }}</span></dd>
             <dt>Submitted By</dt><dd>{{ ticket.submitter_name }}</dd>
+            <dt>Issue Category</dt><dd>{% if ticket.category_name %}{{ ticket.category_name }}{% else %}—{% endif %}</dd>
+            <dt>Affected User</dt>
+            <dd>
+                {% if ticket.affected_user_name or ticket.affected_user_email %}
+                    {{ ticket.affected_user_name or '' }}
+                    {% if ticket.affected_user_email %}
+                        &lt;<a href="mailto:{{ ticket.affected_user_email }}">{{ ticket.affected_user_email }}</a>&gt;
+                    {% endif %}
+                {% else %}
+                    —
+                {% endif %}
+            </dd>
             <dt>Assigned To</dt><dd>{{ ticket.assignee_name or 'Unassigned' }}</dd>
             {% if ticket.asset_tag %}
             <dt>Asset</dt><dd>{{ ticket.asset_tag }} — {{ ticket.equipment_name }}</dd>

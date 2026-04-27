@@ -1,7 +1,7 @@
 """Tickets — maintenance, moves, requests, incidents."""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g
 from database import get_db, log_audit
-from email_service import notify_ticket_created, notify_ticket_update
+from email_service import notify_ticket_created, notify_ticket_update, notify_affected_user
 
 tickets_bp = Blueprint('tickets', __name__)
 
@@ -107,6 +107,16 @@ def new_ticket():
             ))
             log_audit(conn, 'tickets', cur.lastrowid, 'create',
                       changed_by=g.user['id'])
+            # Send "we got your ticket" to the affected user (no-op if blank).
+            created = conn.execute("""
+                SELECT t.ticket_number, t.title, t.description, t.resolution,
+                       t.affected_user_email, a.asset_tag, em.name AS equipment_name
+                FROM tickets t
+                LEFT JOIN assets a ON t.asset_id = a.id
+                LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
+                WHERE t.id = ?
+            """, (cur.lastrowid,)).fetchone()
+            notify_affected_user(dict(created), 'created')
             flash(f'Ticket {ticket_num} created.', 'success')
             return redirect(url_for('tickets.ticket_detail', ticket_id=cur.lastrowid))
 
@@ -132,12 +142,14 @@ def ticket_detail(ticket_id):
     with get_db() as conn:
         ticket = conn.execute("""
             SELECT t.*, e.name as submitter_name, ea.name as assignee_name,
-                   a.asset_tag, em.name as equipment_name
+                   a.asset_tag, em.name as equipment_name,
+                   ic.name as category_name
             FROM tickets t
             JOIN employees e ON t.submitted_by = e.id
             LEFT JOIN employees ea ON t.assigned_to = ea.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
+            LEFT JOIN issue_categories ic ON t.issue_category_id = ic.id
             WHERE t.id = ?
         """, (ticket_id,)).fetchone()
 
@@ -195,7 +207,12 @@ def update_ticket(ticket_id):
         new_status = request.form.get('status', old['status'])
         new_priority = request.form.get('priority', old['priority'])
         new_assignee = request.form.get('assigned_to', type=int) or old['assigned_to']
-        resolution = request.form.get('resolution', old['resolution'] or '')
+        resolution = request.form.get('resolution', old['resolution'] or '').strip()
+
+        # Resolution is required when transitioning into 'resolved'.
+        if new_status == 'resolved' and old['status'] != 'resolved' and not resolution:
+            flash('Resolution is required when resolving a ticket.', 'error')
+            return redirect(url_for('tickets.ticket_detail', ticket_id=ticket_id))
 
         extra = ""
         params = [new_status, new_priority, new_assignee, resolution]
@@ -212,8 +229,9 @@ def update_ticket(ticket_id):
 
         if new_status != old['status']:
             log_audit(conn, 'tickets', ticket_id, 'status_change',
-                      'status', old['status'], new_status)
-            # Email the submitter
+                      'status', old['status'], new_status,
+                      changed_by=g.user['id'])
+            # Email the original ticket submitter (existing behavior).
             submitter = conn.execute(
                 "SELECT email FROM employees WHERE id=?", (old['submitted_by'],)
             ).fetchone()
@@ -223,6 +241,18 @@ def update_ticket(ticket_id):
                 ).fetchone()
                 notify_ticket_update(dict(updated_ticket), submitter['email'],
                                      'status_change', g.user['name'])
+
+            # NEW: when resolved, also email the affected end user.
+            if new_status == 'resolved':
+                resolved = conn.execute("""
+                    SELECT t.ticket_number, t.title, t.description, t.resolution,
+                           t.affected_user_email, a.asset_tag, em.name AS equipment_name
+                    FROM tickets t
+                    LEFT JOIN assets a ON t.asset_id = a.id
+                    LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
+                    WHERE t.id = ?
+                """, (ticket_id,)).fetchone()
+                notify_affected_user(dict(resolved), 'resolved')
 
         flash('Ticket updated.', 'success')
     return redirect(url_for('tickets.ticket_detail', ticket_id=ticket_id))

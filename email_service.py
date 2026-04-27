@@ -83,6 +83,52 @@ def notify_ticket_created(ticket, submitter):
         """))
 
 
+def notify_affected_user(ticket, kind):
+    """Email the affected end user about ticket creation or resolution.
+
+    `ticket` is a dict-like row that must include: ticket_number, title,
+    description, resolution, asset_tag, equipment_name, affected_user_email.
+    `kind` ∈ {'created', 'resolved'}. No-op if affected_user_email is blank.
+    """
+    email = ticket.get('affected_user_email')
+    if not email:
+        return
+
+    asset_label = f"{ticket.get('asset_tag', '')} — {ticket.get('equipment_name', '')}".strip(" —")
+    if kind == 'created':
+        subject = f"Ticket #{ticket['ticket_number']} received: {ticket['title']}"
+        body_html = f"""
+        <p>Hi,</p>
+        <p>We have received your issue and opened ticket
+           <strong>#{ticket['ticket_number']}</strong>.</p>
+        <p><strong>Asset:</strong> {asset_label}<br>
+           <strong>Issue:</strong> {ticket['title']}</p>
+        <p><strong>What you reported:</strong><br>
+           {(ticket.get('description') or '').replace(chr(10), '<br>')}</p>
+        <p>We will email you again once it is resolved. If you need to add
+           anything, just reply to this email.</p>
+        <p>— SAIL (AMT control team)</p>
+        """
+    elif kind == 'resolved':
+        subject = f"Ticket #{ticket['ticket_number']} resolved: {ticket['title']}"
+        body_html = f"""
+        <p>Hi,</p>
+        <p>Ticket <strong>#{ticket['ticket_number']}</strong> has been
+           resolved.</p>
+        <p><strong>Asset:</strong> {asset_label}<br>
+           <strong>Issue:</strong> {ticket['title']}</p>
+        <p><strong>Resolution:</strong><br>
+           {(ticket.get('resolution') or '').replace(chr(10), '<br>')}</p>
+        <p>If the issue is not actually fixed, reply to this email and we
+           will reopen the ticket.</p>
+        <p>— SAIL (AMT control team)</p>
+        """
+    else:
+        return
+
+    send_email(email, subject, _base_html(body_html))
+
+
 def notify_ticket_update(ticket, user_email, update_type, updater_name=None):
     """Notify ticket submitter of status change or comment."""
     if not user_email:
