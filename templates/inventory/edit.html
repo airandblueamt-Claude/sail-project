@@ -49,7 +49,7 @@
     </div>
     <div class="form-row">
         <label>Equipment Photo</label>
-        {% if model.image_path and model.image_path.startswith('http') %}
+        {% if model.image_path and model.image_path.startswith(('http://', 'https://')) %}
         <div class="current-image">
             <img src="{{ model.image_path }}" alt="{{ model.name }}">
             <p class="muted">Current image (external URL — upload a new file to replace it).</p>

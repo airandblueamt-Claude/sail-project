@@ -29,7 +29,7 @@
 <div class="equipment-grid">
     {% for m in models %}
     <a href="{{ url_for('inventory.model_detail', model_id=m.id) }}" class="equipment-card">
-        {% if m.image_path and m.image_path.startswith('http') %}
+        {% if m.image_path and m.image_path.startswith(('http://', 'https://')) %}
         <div class="eq-card-img">
             <img src="{{ m.image_path }}" alt="{{ m.name }}">
         </div>
