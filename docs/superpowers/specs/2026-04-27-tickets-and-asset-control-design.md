@@ -6,13 +6,13 @@
 
 ## 1 — Purpose
 
-The control team receives ad-hoc emails from end users about broken company equipment ("the TV in conference room 3 isn't working"). Today there is no record. Once a ticket is closed, nothing is left behind — when the same TV breaks again next month, the team starts from zero.
+The control team receives ad-hoc emails from end users about issues with company equipment — anything from the AMT asset inventory (`Assets Inventory _20-04-2026-Tool (V3).xlsx` — 230 individual assets across workstations, laptops, monitors, displays, printers, networking gear, and so on). A user reports "the conference-room display is black" or "this laptop won't boot" or "the printer is jammed"; today there is no record. Once a ticket is closed, nothing is left behind — when the same unit fails again next month, the team starts from zero.
 
-This tool exists to do three things:
+This tool exists to do three things, for **any asset** in the inventory:
 
-1. Let the control team raise a ticket against the **specific asset** that is failing, with a priority and a description.
+1. Let the control team raise a ticket against the **specific asset** that is failing, with a type, a priority, and a description.
 2. Notify the **affected end user** (by email) that their issue was received and, later, that it was resolved.
-3. Build a **per-asset issue history** so the team can open any asset and see every past failure and how it was fixed.
+3. Build a **per-asset issue history** so the team can open any asset (by tag, model, or location) and see every past failure and how it was fixed.
 
 End users do not log in. They send an email; the team raises the ticket on their behalf.
 
@@ -56,10 +56,12 @@ No other schema changes. `assets`, `equipment_models`, `categories`, `locations`
 ### 4.2 Core flow
 
 ```
-End user emails the team:  "TV in CR3 broken"
+End user emails the team about any asset issue (e.g. "display in CR3 is black",
+"my laptop SAIL-16038 keeps freezing", "printer in finance is jammed")
             │
             ▼
-Team member opens SAIL → /inventory → searches "CR3" → opens the TV's asset page
+Team member opens SAIL → /inventory → searches by tag, model, or location
+                       → opens that asset's detail page
             │
             ▼
 Clicks "Raise Issue"  (form is pre-populated with asset_id)
