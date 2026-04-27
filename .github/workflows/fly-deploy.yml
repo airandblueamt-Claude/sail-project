@@ -1,0 +1,33 @@
+name: Deploy to Fly.io
+
+# Trigger on every push to master, plus a manual button in the GitHub Actions
+# UI for re-deploying without a code change.
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+# Cancel any in-flight deploy if a newer commit lands on master while one is
+# still running — saves CI minutes and avoids racing two deploys at once.
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        # --remote-only sends the build to Fly's builder rather than running
+        # Docker on the GitHub runner. Faster and avoids the Docker setup step.
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
