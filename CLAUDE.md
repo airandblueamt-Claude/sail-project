@@ -12,7 +12,8 @@ The entire app lives in this directory — there is no separate analytics/invent
 
 ```bash
 pip install -r requirements.txt   # flask, openpyxl
-python init_db.py                 # creates sail.db from schema.sql + imports equipment_clean.csv
+python init_db.py                 # creates an empty sail.db from schema.sql
+python import_assets_v3.py        # loads "Assets Inventory _20-04-2026-Tool (V3).xlsx" (230 assets)
 python app.py                     # serves http://localhost:5555
 ```
 
@@ -81,8 +82,8 @@ Branding: both `static/amt-logo.png` and `static/amt-logo-white.png` are the red
 
 ### Data import / export scripts
 
-- `clean_equipment.py` — turns the raw `SAIL Equipment List (AMT_SCOPE).xlsx` into `equipment_clean.csv` (merges continuation rows, fixes category names).
-- `init_db.py` — runs `schema.sql`, then imports `equipment_clean.csv` into `equipment_models`.
+- `init_db.py` — applies `schema.sql` to create an empty `sail.db`. Wipes any existing DB.
+- `import_assets_v3.py` — reads `Assets Inventory _20-04-2026-Tool (V3).xlsx` (sheet `IT Assets`), derives `categories` / `locations` / `equipment_models`, and inserts 230 rows into `assets`. Backs up the DB first; supports `--dry-run` and `--xlsx PATH`. The V3 spreadsheet is the single source of truth for inventory.
 - `export_clean.py` — dumps the DB back to a formatted Excel workbook.
 
 ## Design docs

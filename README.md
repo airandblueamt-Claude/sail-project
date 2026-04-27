@@ -28,8 +28,11 @@ cd sail-project
 # Install dependencies
 pip install -r requirements.txt
 
-# Initialize the database (imports equipment from CSV)
+# Initialize the database (creates an empty sail.db from schema.sql)
 python init_db.py
+
+# Load the V3 inventory spreadsheet (230 assets)
+python import_assets_v3.py
 
 # Run
 python app.py
@@ -77,8 +80,8 @@ sail-project/
 ├── database.py             # SQLite connection helpers, audit logging
 ├── email_service.py        # Email notification functions
 ├── schema.sql              # Full database schema
-├── init_db.py              # DB initialization + CSV import
-├── clean_equipment.py      # Excel → clean CSV processor
+├── init_db.py              # DB schema bootstrap (empty sail.db)
+├── import_assets_v3.py     # Loads V3 inventory spreadsheet → assets
 ├── export_clean.py         # DB → formatted Excel export
 ├── backup_db.py            # Database backup utility
 ├── requirements.txt
