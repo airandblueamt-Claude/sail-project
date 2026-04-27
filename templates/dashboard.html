@@ -5,7 +5,21 @@
 <div class="page-header">
     <div>
         <h2>Welcome, {{ current_user.name.split()[0] }}</h2>
-        <p class="muted">{{ stats.open_tickets }} open ticket{{ '' if stats.open_tickets == 1 else 's' }} · {{ stats.asset_counts.total }} assets tracked</p>
+        <p class="muted">
+            {{ stats.open_tickets }} open ticket{{ '' if stats.open_tickets == 1 else 's' }} ·
+            {{ stats.asset_counts.total }} assets tracked ·
+            {% if stats.smtp_configured %}
+              <span style="display:inline-flex;align-items:center;gap:4px" title="SAIL_SMTP_PASSWORD is set — outbound emails will deliver">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e"></span>
+                Email on
+              </span>
+            {% else %}
+              <span style="display:inline-flex;align-items:center;gap:4px" title="SAIL_SMTP_PASSWORD not set — emails are logged but not sent">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#9ca3af"></span>
+                Email off (set SAIL_SMTP_PASSWORD)
+              </span>
+            {% endif %}
+        </p>
     </div>
     <div>
         <a href="{{ url_for('tickets.new_ticket') }}" class="btn btn-primary">

@@ -1,6 +1,7 @@
 """Dashboard — single-role landing page for the control team."""
 from flask import Blueprint, render_template
 from database import get_db
+from config import SMTP_PASSWORD
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -62,5 +63,9 @@ def index():
             FROM assets
         """).fetchone()
         stats['asset_counts'] = dict(counts) if counts else {'available': 0, 'in_use': 0, 'total': 0}
+
+        # SMTP configured? (Same check email_service.send_email uses.)
+        stats['smtp_configured'] = bool(
+            SMTP_PASSWORD and SMTP_PASSWORD != "YOUR_APP_PASSWORD_HERE")
 
     return render_template('dashboard.html', stats=stats)
