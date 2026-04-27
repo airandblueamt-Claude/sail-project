@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}SAIL - {{ asset.asset_tag }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('inventory.manage_assets') }}" class="breadcrumb">Assets</a>
+        <h2>{{ asset.asset_tag }}</h2>
+        <p class="muted">{{ asset.model_name }}{% if asset.brand %} — {{ asset.brand }}{% endif %}</p>
+    </div>
+    <div>
+        <a href="{{ url_for('tickets.new_ticket', asset_id=asset.id) }}" class="btn btn-primary">
+            <i data-lucide="alert-circle"></i> Raise New Issue
+        </a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:24px">
+    <h4 style="margin-top:0">Asset Summary</h4>
+    <table class="data-table compact">
+        <tr><th>Tag</th><td>{{ asset.asset_tag }}</td></tr>
+        <tr><th>Model</th><td>{{ asset.model_name }}{% if asset.model_number %} ({{ asset.model_number }}){% endif %}</td></tr>
+        <tr><th>Category</th><td>{{ asset.category_name or '—' }}</td></tr>
+        <tr><th>Location</th><td>{{ asset.location_name or '—' }}</td></tr>
+        <tr><th>Status</th><td><span class="badge">{{ asset.status }}</span></td></tr>
+        <tr><th>Condition</th><td>{{ asset.condition }}</td></tr>
+        <tr><th>Serial</th><td>{{ asset.serial_number or '—' }}</td></tr>
+        <tr><th>Holder (from import)</th><td>{{ asset.holder_name or '—' }}</td></tr>
+        {% if asset.notes %}<tr><th>Notes</th><td>{{ asset.notes }}</td></tr>{% endif %}
+    </table>
+</div>
+
+<div class="card">
+    <h4 style="margin-top:0">Issue History</h4>
+    {% if not tickets %}
+        <p class="muted">No tickets have been raised against this asset yet.</p>
+    {% else %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Ticket</th>
+                <th>Opened</th>
+                <th>Category</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Title</th>
+                <th>Resolved</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in tickets %}
+            <tr>
+                <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.ticket_number }}</a></td>
+                <td>{{ t.created_at[:10] }}</td>
+                <td>{{ t.category_name or '—' }}</td>
+                <td><span class="badge badge-{{ t.priority }}">{{ t.priority }}</span></td>
+                <td><span class="badge">{{ t.status }}</span></td>
+                <td>{{ t.title }}</td>
+                <td>{{ t.resolved_at[:10] if t.resolved_at else '—' }}</td>
+            </tr>
+            {% if t.resolution %}
+            <tr><td></td><td colspan="6" class="muted" style="font-size:0.9em"><strong>Resolution:</strong> {{ t.resolution }}</td></tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

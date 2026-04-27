@@ -28,7 +28,7 @@
     <tbody>
         {% for a in assets %}
         <tr>
-            <td><strong>{{ a.asset_tag }}</strong></td>
+            <td><a href="{{ url_for('inventory.asset_detail', asset_id=a.id) }}"><strong>{{ a.asset_tag }}</strong></a></td>
             <td>{{ a.eq_name }}</td>
             <td>{{ a.brand }}</td>
             <td><span class="badge badge-cat">{{ a.category_name }}</span></td>

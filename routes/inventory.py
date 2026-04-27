@@ -402,6 +402,39 @@ def manage_assets():
     return render_template('inventory/manage_assets.html', assets=assets)
 
 
+@inventory_bp.route('/asset/<int:asset_id>')
+def asset_detail(asset_id):
+    with get_db() as conn:
+        asset = conn.execute("""
+            SELECT a.*, em.name AS model_name, em.brand, em.model_number,
+                   c.name AS category_name,
+                   COALESCE(l.label, l.code) AS location_name
+            FROM assets a
+            JOIN equipment_models em ON a.equipment_model_id = em.id
+            LEFT JOIN categories c ON em.category_id = c.id
+            LEFT JOIN locations l ON a.location_id = l.id
+            WHERE a.id = ?
+        """, (asset_id,)).fetchone()
+        if not asset:
+            flash('Asset not found.', 'error')
+            return redirect(url_for('inventory.manage_assets'))
+
+        tickets = conn.execute("""
+            SELECT t.id, t.ticket_number, t.title, t.status, t.priority,
+                   t.created_at, t.resolved_at, t.resolution,
+                   ic.name AS category_name,
+                   e.name AS submitter_name
+            FROM tickets t
+            LEFT JOIN issue_categories ic ON t.issue_category_id = ic.id
+            LEFT JOIN employees e ON t.submitted_by = e.id
+            WHERE t.asset_id = ?
+            ORDER BY t.created_at DESC
+        """, (asset_id,)).fetchall()
+
+    return render_template('inventory/asset_detail.html',
+                           asset=asset, tickets=tickets)
+
+
 @inventory_bp.route('/assets/register/<int:model_id>', methods=['GET', 'POST'])
 def register_asset(model_id):
     if g.user['role'] not in ('admin', 'manager'):
