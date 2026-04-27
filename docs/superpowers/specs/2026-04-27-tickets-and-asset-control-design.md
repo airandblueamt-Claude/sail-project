@@ -44,17 +44,29 @@ For schema compatibility these accounts are stored with `role='admin'` — the e
 
 ### 4.1 Schema delta
 
-Two nullable columns added to the existing `tickets` table, and one to `employees`:
+Two nullable columns added to the existing `tickets` table, one to `employees`, and one new lookup table for team-managed issue categories:
 
 ```sql
 ALTER TABLE tickets   ADD COLUMN affected_user_name  TEXT;
 ALTER TABLE tickets   ADD COLUMN affected_user_email TEXT;
+ALTER TABLE tickets   ADD COLUMN issue_category_id   INTEGER REFERENCES issue_categories(id);
 ALTER TABLE employees ADD COLUMN password_hash       TEXT;
+
+CREATE TABLE IF NOT EXISTS issue_categories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    is_active   INTEGER DEFAULT 1,
+    created_by  INTEGER REFERENCES employees(id),
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_tickets_issue_cat ON tickets(issue_category_id);
 ```
 
-`tickets` columns are nullable because older tickets do not have these values, and a team member may legitimately raise a ticket with no specific affected user (preventive maintenance, asset audit, etc.). When the email field is blank, the affected-user notification is simply skipped.
+`tickets` columns are nullable because older tickets do not have these values, and a team member may legitimately raise a ticket with no specific affected user (preventive maintenance, asset audit, etc.). When the email field is blank, the affected-user notification is simply skipped. `issue_category_id` is required by the form (see 4.5) but stays nullable in the schema for the same migration-safety reason.
 
 `employees.password_hash` is nullable in the schema for migration safety, but the login route requires it: an account with no hash cannot sign in. The seed script populates the hash for all four control-team accounts.
+
+`issue_categories` ships with a starter list grounded in the V3 inventory's actual asset mix (workstations, monitors, smart boards, touch screens, TV screens, Google TVs, printers, smart podiums, eye-tracking systems, access control). The team adds and deactivates rows from a small admin page (see 4.9).
 
 No other schema changes. `assets`, `equipment_models`, `categories`, `locations`, `bookings`, `ticket_comments`, `audit_log` are all left intact.
 
@@ -110,15 +122,17 @@ This page replaces the prior "browse and book" affordance. There is no longer an
 
 ### 4.5 Ticket form
 
-`/tickets/new` accepts an optional `?asset_id=` query param. Fields:
+`/tickets/new` accepts an optional `?asset_id=` query param. Fields shown to the team:
 
 - **Asset** (required) — preselected if `asset_id` came in the URL; otherwise a searchable dropdown.
-- **Type** — existing CHECK values (`maintenance`, `incident`, etc.). Default `incident` since that's the dominant case.
+- **Issue Category** (required) — populated from `issue_categories` where `is_active = 1`, ordered by name. The form has a small "+ add new" link next to the dropdown that opens the admin page (see 4.9) in a new tab so the team can extend the list without losing their in-progress ticket.
 - **Priority** — `low` / `medium` / `high` / `critical`. Default `medium`.
 - **Title** (required, short).
 - **Description** (free text).
 - **Affected user name** (optional).
 - **Affected user email** (optional, validated as email if provided).
+
+The legacy `type` column is set server-side to `'incident'` for every ticket created from this form. The column itself is preserved so tickets remain queryable by the older typology if it earns its keep later, but it is no longer surfaced to the user — the issue category is the single classification field they touch.
 
 On submit: insert the ticket, audit-log the creation, send the "ticket received" email to the affected user (if email present).
 
@@ -158,7 +172,34 @@ In `routes/dashboard.py` and `routes/reports.py` the booking SELECTs are short-c
 
 Reversibility: flip the flag back to `True` and every booking link, page, and stat returns. No deletions to undo.
 
-### 4.9 Email
+### 4.9 Issue categories — admin page
+
+A small admin screen at `/issue-categories` lets the team manage the dropdown:
+
+- **List view** — table of all categories with name, active/inactive status, who created it, when. Inline toggle to flip `is_active` (deactivating just hides it from the form; existing tickets keep their category reference). No hard delete, since tickets reference the row.
+- **Add form** — single text input (`name`), uniqueness enforced by the `UNIQUE` constraint on the column. Records `created_by = g.user.id`.
+- **Audit log** — every add and every active/inactive flip is written to `audit_log` via the standard `log_audit(conn, 'issue_categories', id, action, …)` helper.
+
+The page is reachable from the sidebar (under a "Settings" group) and from the `+ add new` link on the ticket form (see 4.5).
+
+**Seed list** (inserted by the seed script, grounded in the V3 inventory's actual asset mix):
+
+| Category                       | Covers (informally)                                  |
+|--------------------------------|------------------------------------------------------|
+| Display / Screen issue         | Monitor, TV Screen, Google TV, Smart Board, Smart Podium, Touch Screen |
+| Touch / Calibration failure    | Smart Board, Touch Screen, Smart Podium              |
+| Won't power on                 | Any powered asset                                    |
+| Slow / Freezing                | Workstation, Smart Board, Smart Podium               |
+| Software / OS issue            | Workstation, Smart Podium, Eye Tracking System       |
+| Network / Connectivity         | Any networked asset                                  |
+| Printer issue (jam, toner, quality) | Printers                                        |
+| Peripheral issue (keyboard, mouse, audio, camera) | Workstation, Smart Podium         |
+| Physical damage                | Any                                                  |
+| Other                          | Catch-all                                            |
+
+The team is expected to add more as new failure modes appear.
+
+### 4.10 Email
 
 A new helper in `email_service.py`:
 
@@ -185,27 +226,32 @@ Existing internal-team notification helpers (assignment, comments) are unchanged
 - **Resolution field blank on resolve** — form rejects submission with "Resolution required when resolving a ticket."
 - **Login attempt for an account with no `password_hash`** — generic "invalid credentials" error, same as a wrong password. The system never reveals whether the email exists.
 - **Password change with wrong current password** — generic "current password is incorrect" error; new password is not written.
+- **Adding an issue category that already exists** — the column is declared `name TEXT NOT NULL UNIQUE COLLATE NOCASE` so SQLite rejects the insert when a case-insensitive match exists; the form flashes "Category already exists." This avoids `Display issue` and `display issue` cluttering the list.
+- **Deactivating a category referenced by existing tickets** — allowed. The dropdown stops offering it; ticket pages still render the original name via the FK join.
 
 ## 6 — Testing
 
 No automated test suite (per CLAUDE.md). Manual verification checklist, to be expanded into the implementation plan:
 
 1. Fresh DB → seed inserts the four accounts, all with `role='admin'` and a `password_hash` set.
-2. `/register` is no longer reachable from the nav.
-3. Login form rejects empty password, wrong password, and unknown email with the same generic error.
-4. Login with `airandblueamt@gmail.com` + `Aramco@123` → succeeds, session set, lands on dashboard.
-5. `/account/password` lets the logged-in user change their password; logging out and back in with the new password works; the old password no longer works.
-6. Open an asset detail page → "Raise New Issue" button is visible → form pre-populates `asset_id`.
-7. Submit the form with an affected_user_email → ticket created, log shows email send (or actual send if SMTP configured).
-8. Resolve the ticket with a resolution note → second email sent to the same address.
-9. Re-open the asset's detail page → the ticket appears in Issue History with status `resolved` and the resolution text.
-10. Sidebar contains no booking links; `/bookings` returns 404.
-11. Flipping `BOOKINGS_ENABLED = True` restores everything booking-related with no other change.
+2. Fresh DB → seed inserts the ten starter issue categories with `is_active = 1`.
+3. `/register` is no longer reachable from the nav.
+4. Login form rejects empty password, wrong password, and unknown email with the same generic error.
+5. Login with `airandblueamt@gmail.com` + `Aramco@123` → succeeds, session set, lands on dashboard.
+6. `/account/password` lets the logged-in user change their password; logging out and back in with the new password works; the old password no longer works.
+7. Open an asset detail page → "Raise New Issue" button is visible → form pre-populates `asset_id`.
+8. Ticket form shows the Issue Category dropdown populated with the ten seeded categories; submission without a category is rejected.
+9. `/issue-categories` lets the team add a new category; it appears in the dropdown immediately on next form load. Deactivating it removes it from the dropdown but existing tickets still show its name.
+10. Submit the form with an affected_user_email → ticket created with the chosen issue category, log shows email send (or actual send if SMTP configured).
+11. Resolve the ticket with a resolution note → second email sent to the same address.
+12. Re-open the asset's detail page → the ticket appears in Issue History with status `resolved`, its issue category, and the resolution text.
+13. Sidebar contains no booking links; `/bookings` returns 404.
+14. Flipping `BOOKINGS_ENABLED = True` restores everything booking-related with no other change.
 
 ## 7 — Files touched
 
-- `schema.sql` — add the two `tickets` columns and the `employees.password_hash` column.
-- `init_db.py` (or a new `seed_users.py`) — insert the four accounts as `role='admin'` with `generate_password_hash('Aramco@123')`.
+- `schema.sql` — add the three `tickets` columns, the `employees.password_hash` column, and the `issue_categories` table + index.
+- `init_db.py` (or a new `seed_users.py`) — insert the four accounts as `role='admin'` with `generate_password_hash('Aramco@123')`, and seed the ten starter issue categories.
 - `config.py` — `BOOKINGS_ENABLED = False`.
 - `app.py` — context processor for `bookings_enabled`; remove the public `/register` route; rewrite the login route to validate `password_hash`; add `/account/password` for password changes.
 - `templates/login.html` — add password field.
@@ -218,11 +264,13 @@ No automated test suite (per CLAUDE.md). Manual verification checklist, to be ex
 - `templates/base.html` — gate booking sidebar links; rename app sections if needed.
 - `templates/dashboard.html` — single-role dashboard.
 - `templates/inventory/detail.html` — issue history section + "Raise New Issue" button.
-- `templates/tickets/form.html` — affected-user fields, asset preselection.
-- `templates/tickets/detail.html` — show affected user in header.
+- `templates/tickets/form.html` — affected-user fields, asset preselection, issue-category dropdown, "+ add new" link, removal of the type field.
+- `templates/tickets/detail.html` — show affected user and issue category in header.
 - `templates/reports/inventory.html` — gate booking blocks.
+- `routes/issue_categories.py` (new) — list + add + toggle-active endpoints.
+- `templates/issue_categories/index.html` (new) — admin page.
 - `email_service.py` — `notify_affected_user(ticket, kind)`.
 
 ## 8 — Reversibility
 
-The booking module is gated, not deleted. The new `tickets` and `employees` columns are all nullable. Reverting this entire spec is `git revert` of the implementation commits — no destructive schema migrations. (Reverting the auth change does mean every account effectively becomes login-less again; rotating credentials beforehand is the safer reversal path.)
+The booking module is gated, not deleted. The new `tickets` and `employees` columns are all nullable, and the new `issue_categories` table is purely additive. Reverting this entire spec is `git revert` of the implementation commits — no destructive schema migrations. (Reverting the auth change does mean every account effectively becomes login-less again; rotating credentials beforehand is the safer reversal path.)
