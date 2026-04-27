@@ -89,6 +89,23 @@ fly ssh console
 fly machine restart
 ```
 
+### Auto-deploy on git push (GitHub Actions)
+
+`.github/workflows/fly-deploy.yml` ships in the repo. Every push to `master` triggers `flyctl deploy --remote-only`. Setup is two steps:
+
+```bash
+# 1. Generate a long-lived deploy token (1-year expiry shown).
+fly tokens create deploy --expiry 8760h
+# Copy the token (starts with "FlyV1 ").
+
+# 2. Add it to your GitHub repo:
+#    Settings → Secrets and variables → Actions → New repository secret
+#    Name:  FLY_API_TOKEN
+#    Value: <the token from step 1>
+```
+
+After that, `git push` deploys automatically. Re-deploys without a code change can be triggered manually from the Actions tab → "Deploy to Fly.io" → "Run workflow".
+
 ## Project Layout
 
 ```
