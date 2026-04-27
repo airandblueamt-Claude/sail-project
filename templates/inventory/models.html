@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% block title %}SAIL - Browse Equipment{% endblock %}
+{% block title %}SAIL - Equipment Catalog{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h2>Browse &amp; Book Equipment</h2>
+    <h2>Equipment Catalog</h2>
 </div>
 
 <div class="info-banner">
     <i data-lucide="info"></i>
-    <span>Find the equipment you need, click into it, then hit <strong>Book</strong> on an available unit.</span>
+    <span>Browse equipment models. Click any card to see its individual assets, status, and full issue history.</span>
 </div>
 <script>lucide.createIcons();</script>
 
 <form class="filter-bar" method="get">
-    <input type="text" name="q" value="{{ q }}" placeholder="Search by name, brand, specs..." class="input" style="max-width:280px">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by name or specs..." class="input" style="max-width:280px">
     <select name="category" class="input" style="max-width:220px">
         <option value="">All Categories</option>
         {% for c in categories %}
@@ -54,7 +54,6 @@
                 {% endif %}
             </div>
             <h3 class="eq-card-name">{{ m.name }}</h3>
-            <p class="eq-card-brand">{{ m.brand }}</p>
         </div>
     </a>
     {% endfor %}

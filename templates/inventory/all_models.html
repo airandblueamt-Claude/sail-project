@@ -28,8 +28,6 @@
         <tr>
             <th>Category</th>
             <th>Description</th>
-            <th>Brand</th>
-            <th class="num">Qty</th>
             <th class="num">Registered</th>
             <th></th>
         </tr>
@@ -39,8 +37,6 @@
         <tr>
             <td><span class="badge badge-cat">{{ m.category_name }}</span></td>
             <td><a href="{{ url_for('inventory.model_detail', model_id=m.id) }}">{{ m.name }}</a></td>
-            <td>{{ m.brand }}</td>
-            <td class="num">{{ m.expected_qty or '-' }}</td>
             <td class="num">{{ m.registered_assets }}</td>
             <td>
                 <a href="{{ url_for('inventory.model_detail', model_id=m.id) }}" class="btn btn-sm">View</a>

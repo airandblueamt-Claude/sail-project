@@ -17,7 +17,6 @@
         <tr>
             <th>Asset Tag</th>
             <th>Equipment</th>
-            <th>Brand</th>
             <th>Category</th>
             <th>Serial</th>
             <th>Location</th>
@@ -30,7 +29,6 @@
         <tr>
             <td><a href="{{ url_for('inventory.asset_detail', asset_id=a.id) }}"><strong>{{ a.asset_tag }}</strong></a></td>
             <td>{{ a.eq_name }}</td>
-            <td>{{ a.brand }}</td>
             <td><span class="badge badge-cat">{{ a.category_name }}</span></td>
             <td>{{ a.serial_number or '-' }}</td>
             <td>{{ a.location_code or '-' }}</td>
