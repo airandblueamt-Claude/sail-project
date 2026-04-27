@@ -6,6 +6,9 @@ backups/
 static/uploads/*
 !static/uploads/.gitkeep
 *.xlsx
+# Track the V3 inventory spreadsheet — it's the source of truth for the
+# asset import and needs to ship with the deploy.
+!Assets Inventory _20-04-2026-Tool (V3).xlsx
 *.csv
 ~$*
 .env
