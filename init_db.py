@@ -2,7 +2,7 @@
 Initialize the SAIL database from schema.sql.
 
 Usage:  python init_db.py
-Output: sail.db (SQLite, empty schema)
+Output: sail.db (SQLite, empty schema). Any existing sail.db is deleted.
 
 After running this, run import_assets_v3.py to load the inventory data.
 """
