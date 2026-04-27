@@ -1,7 +1,7 @@
 # Fly.io configuration for SAIL.
 # Edit `app` and `primary_region` for your deployment, then `fly launch --copy-config`.
 
-app = "sail-asset-tracker"
+app = "sail-assets"
 primary_region = "fra"  # pick from `fly platform regions` — fra/dxb/sin etc.
 
 [build]
