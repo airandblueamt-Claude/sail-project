@@ -1,43 +1,129 @@
-# Tickets + Asset Control — Design Spec
+# Asset Issue Tracking — Design Spec
 
 **Date:** 2026-04-27
 **Status:** Specced (awaiting plan)
-**Scope:** Re-scope the live SAIL app to its core: ticketing and asset control for a 4-user team. Hide the booking flow without deleting it.
+**Scope:** Re-purpose SAIL as a single-team tool for the AMT control team to log, work, and recall issues raised against company assets.
 
 ## 1 — Purpose
 
-SAIL currently ships three flows: **inventory**, **bookings**, and **tickets**. In day-to-day use the team needs only two of them — track what assets exist and where they are, and let employees raise tickets to admins. The booking/approve/checkout/return cycle adds friction the 4-user team does not need.
+The control team receives ad-hoc emails from end users about broken company equipment ("the TV in conference room 3 isn't working"). Today there is no record. Once a ticket is closed, nothing is left behind — when the same TV breaks again next month, the team starts from zero.
 
-This spec re-scopes the live app to:
+This tool exists to do three things:
 
-1. **Asset control.** Admins maintain the asset list and assign individual units to employees directly. Anyone can see what is available and who is holding what.
-2. **Tickets.** Employees raise tickets, admins triage and resolve them. The existing ticket module is kept as-is.
-3. **Bookings hidden, not deleted.** The booking module is gated behind a single feature flag so it can be re-enabled later without re-implementation.
+1. Let the control team raise a ticket against the **specific asset** that is failing, with a priority and a description.
+2. Notify the **affected end user** (by email) that their issue was received and, later, that it was resolved.
+3. Build a **per-asset issue history** so the team can open any asset and see every past failure and how it was fixed.
+
+End users do not log in. They send an email; the team raises the ticket on their behalf.
 
 ## 2 — Users
 
-The system is operated by exactly four people. Accounts are seeded at install time; self-registration is removed from the UI.
+The system has exactly one role: **team** (the four control-team accounts). All four are functionally admins. Self-registration is removed; accounts are seeded at install.
 
-| Email                          | Role     |
-|--------------------------------|----------|
-| airandblueamt@gmail.com        | admin    |
-| m.shaikh@amt-arabia.net        | admin    |
-| omar.bawadod@aramco.com        | employee |
-| ali.almatrood@aramco.com       | employee |
+| Email                     |
+|---------------------------|
+| airandblueamt@gmail.com   |
+| m.shaikh@amt-arabia.net   |
+| omar.bawadod@aramco.com   |
+| ali.almatrood@aramco.com  |
 
-Both admins receive ticket notifications. Employees receive notifications about their own tickets only.
+(For schema compatibility these accounts are stored with `role='admin'` — the existing role check unblocks every screen for them. No employee role is used.)
 
 ## 3 — Non-goals
 
-- Booking, reservation, approval, or checkout flow in the UI. The tables stay in the schema, the routes stay in the codebase, but nothing surfaces the feature to users.
-- Self-registration. The `/register` route is removed from the nav. The four accounts are pre-seeded; new users are created by an admin from the Employees page.
-- Per-employee asset history view. The existing `audit_log` already records every `assigned_to` change with timestamp and actor — no separate history page is built.
-- Email-as-password change. Auth stays session-based and email-only.
-- Reports CSV redesign. The reports page stays; booking-related sections inside it are gated by the same flag.
+- Self-service portal for end users. End users are email recipients, not SAIL users.
+- Booking, reservation, approval, or checkout flow. The tables and routes stay in the codebase but the UI is hidden behind a feature flag.
+- Asset assignment ("who currently holds this laptop"). Not part of this problem; if needed later, the `assets.assigned_to` column is already there.
+- Standalone tickets unattached to an asset. Every ticket created through the new flow is bound to one asset.
+- A separate knowledge-base table. The asset's own ticket history *is* the knowledge base — title, description, comments, resolution per past ticket.
+- Reports redesign. The reports page stays as-is; booking-only sections inside it are gated by the same flag.
 
 ## 4 — Architecture
 
-### 4.1 Feature flag
+### 4.1 Schema delta
+
+Two nullable columns added to the existing `tickets` table:
+
+```sql
+ALTER TABLE tickets ADD COLUMN affected_user_name  TEXT;
+ALTER TABLE tickets ADD COLUMN affected_user_email TEXT;
+```
+
+Why nullable: older tickets do not have these values, and a team member may legitimately raise a ticket with no specific affected user (preventive maintenance, asset audit, etc.). When the email field is blank, the affected-user notification is simply skipped.
+
+No other schema changes. `assets`, `equipment_models`, `categories`, `locations`, `bookings`, `ticket_comments`, `audit_log` are all left intact.
+
+### 4.2 Core flow
+
+```
+End user emails the team:  "TV in CR3 broken"
+            │
+            ▼
+Team member opens SAIL → /inventory → searches "CR3" → opens the TV's asset page
+            │
+            ▼
+Clicks "Raise Issue"  (form is pre-populated with asset_id)
+   fills in: type, priority, title, description,
+             affected_user_name, affected_user_email
+            │
+            ▼
+POST /tickets/new
+   INSERT INTO tickets (..., asset_id=42, submitted_by=team_member)
+   email_service.notify_affected_user(ticket, kind='created')
+            │
+            ▼
+Team works the ticket: comments, status changes (open → in_progress → resolved)
+   On resolve: team writes the `resolution` field
+   email_service.notify_affected_user(ticket, kind='resolved')
+            │
+            ▼
+Next time anyone opens that TV's asset page, the ticket appears in
+its "Issue History" section — title, status, resolution, all comments.
+```
+
+### 4.3 Asset detail page (the load-bearing screen)
+
+`/inventory/asset/<id>` — visible to all team members. Three sections:
+
+1. **Asset summary** — tag, model, brand, location, status, condition, notes.
+2. **Issue history** — table of every ticket where `asset_id = this`, sorted newest first. Columns: opened date, priority, status, title, resolved date. Each row expands to show description, resolution, and comment thread.
+3. **Action** — single button: **Raise New Issue** → `/tickets/new?asset_id=<id>`.
+
+This page replaces the prior "browse and book" affordance. There is no longer any reason to filter the asset list by `is_bookable`; the team needs to see everything.
+
+### 4.4 Ticket form
+
+`/tickets/new` accepts an optional `?asset_id=` query param. Fields:
+
+- **Asset** (required) — preselected if `asset_id` came in the URL; otherwise a searchable dropdown.
+- **Type** — existing CHECK values (`maintenance`, `incident`, etc.). Default `incident` since that's the dominant case.
+- **Priority** — `low` / `medium` / `high` / `critical`. Default `medium`.
+- **Title** (required, short).
+- **Description** (free text).
+- **Affected user name** (optional).
+- **Affected user email** (optional, validated as email if provided).
+
+On submit: insert the ticket, audit-log the creation, send the "ticket received" email to the affected user (if email present).
+
+### 4.5 Ticket workflow (mostly unchanged)
+
+The existing kanban / SLA board stays. The only behavioral additions:
+
+- When a ticket transitions to `resolved`, the team must fill in the `resolution` field (form-level required). On save, send the "your issue is resolved" email to the affected user.
+- The ticket detail page shows the affected user's name + email in the header so the team can reach them by phone if needed.
+
+### 4.6 Dashboard
+
+Single role, single dashboard. Tiles:
+
+- **Open tickets** count.
+- **High / critical priority** queue (top 5, click-through to ticket).
+- **Recently resolved** (last 5) — quick lookback for "didn't I just fix this?"
+- **Unhealthy assets** — assets with `status = 'maintenance'` or `condition = 'damaged'`.
+
+All booking tiles are gated by the feature flag (see 4.7).
+
+### 4.7 Bookings — hidden, not deleted
 
 A single boolean in `config.py`:
 
@@ -45,126 +131,74 @@ A single boolean in `config.py`:
 BOOKINGS_ENABLED = False
 ```
 
-Exposed to Jinja via an `app.context_processor` as `bookings_enabled`. Every booking-related UI element is wrapped in `{% if bookings_enabled %}`. Every booking-related DB query in non-booking routes is guarded by the same Python boolean. Flipping the flag to `True` restores the full booking experience with no code changes.
+Exposed to Jinja via `app.context_processor` as `bookings_enabled`. Three things gate on it:
 
-`routes/bookings.py` registers a `before_request` hook that calls `abort(404)` when the flag is off. The blueprint stays registered so URL-building (`url_for('bookings.…')`) still resolves at template parse time even on pages that don't render those links.
+- Sidebar links to `bookings.*` endpoints in `templates/base.html`.
+- Booking-related tiles and panels in `templates/dashboard.html` and `templates/reports/inventory.html`.
+- A `before_request` guard on `bookings_bp` that calls `abort(404)` when the flag is off. The blueprint stays registered so any stray `url_for('bookings.…')` still resolves at template parse time.
 
-### 4.2 Asset assignment
+In `routes/dashboard.py` and `routes/reports.py` the booking SELECTs are short-circuited when the flag is off — no point paying for them.
 
-The `assets.assigned_to` column already exists (FK to `employees.id`, nullable). No schema migration is required.
+Reversibility: flip the flag back to `True` and every booking link, page, and stat returns. No deletions to undo.
 
-Behavior:
+### 4.8 Email
 
-- The admin asset edit form gains an **"Assign to"** dropdown listing all employees plus an "— Unassigned —" option.
-- On save, the route normalizes status:
-  - `assigned_to` set **and** current status is `available` → status flips to `in_use`.
-  - `assigned_to` cleared **and** current status is `in_use` → status flips to `available`.
-  - `maintenance`, `damaged`, `decommissioned` are not auto-overridden; the admin sets those explicitly.
-- The change is written through the normal `with get_db() as conn:` block, with `log_audit(conn, 'assets', asset_id, 'assign', …)` capturing the before/after holder in the same transaction.
-
-### 4.3 Inventory views
-
-Two distinct views, distinguished by role:
-
-| View              | Audience  | Behavior                                                                 |
-|-------------------|-----------|--------------------------------------------------------------------------|
-| `/inventory`      | employee  | Read-only **Equipment Catalog**. All models, all assets. Columns: tag, model, location, status, holder. No "Reserve" button. No `is_bookable` filter. |
-| `/inventory/admin`| admin     | Existing full CRUD page. Adds the "Assign to" dropdown described in 4.2.  |
-
-The `is_bookable` column on `equipment_models` is left alone — admins keep the toggle in the model form so the data stays correct for if/when bookings re-enable.
-
-### 4.4 Dashboard
-
-Per-role tiles, with all booking tiles gated by the flag:
-
-- **Admin dashboard:** open tickets count · tickets by priority · assets in use vs available · recent tickets (last 5).
-- **Employee dashboard:** my open tickets · "Raise a Ticket" button · assets currently assigned to me.
-
-The booking action card, the "Pending Bookings" stat, and the "Recent Bookings" panel are all wrapped in `{% if bookings_enabled %}`. The corresponding queries in `routes/dashboard.py` are skipped when the flag is off — no point paying for them.
-
-### 4.5 Tickets
-
-Unchanged. The existing module already handles type, priority, assignment, comments, and the kanban/SLA board. The only change is the notification routing:
-
-- New ticket created → email both admins.
-- Ticket status changed or admin comment added → email the ticket creator (always) and the assignee (if different).
-
-These hooks already exist in `email_service.py` for booking notifications; the same pattern is reused.
-
-### 4.6 Reports
-
-The reports page stays. Booking-specific blocks (`bookings_created` stat, top-booked-models table, recent-bookings list) are wrapped in `{% if bookings_enabled %}`. The corresponding SELECTs in `routes/reports.py` are short-circuited when the flag is off.
-
-## 5 — Data flow
-
-Assignment, end to end:
-
-```
-Admin opens /inventory/admin
-  → clicks edit on asset SAIL-16038
-  → picks Omar from "Assign to" dropdown
-  → POST /inventory/admin/<id>/edit
-      with get_db() as conn:
-        UPDATE assets SET assigned_to=?, status='in_use', updated_at=now()
-        log_audit(conn, 'assets', id, 'assign',
-                  before={'assigned_to': null, 'status': 'available'},
-                  after ={'assigned_to': 3,    'status': 'in_use'})
-  → redirect back to /inventory/admin
-  → Omar's dashboard "assets assigned to me" tile now shows SAIL-16038
-  → Employee /inventory view shows holder="Omar Bawadod" on that row
-```
-
-Ticket, end to end:
-
-```
-Omar opens /tickets/new → fills form → submit
-  → INSERT into tickets (created_by=Omar, status='open')
-  → email_service.notify_new_ticket(['airandblueamt@gmail.com', 'm.shaikh@amt-arabia.net'])
-  → admin opens /tickets, assigns to themselves, comments
-  → email_service.notify_ticket_update(omar.email)
-```
-
-## 6 — Error handling
-
-- **Email send failures** are already swallowed with a log message in `email_service.py` (no `SAIL_SMTP_PASSWORD` → no send, no crash). Behavior unchanged.
-- **Assigning to a non-existent employee** is prevented at form level (the dropdown is populated from `employees` and the FK constraint catches anything else).
-- **Status conflict** (e.g. admin tries to assign an asset currently in `maintenance`) — the route refuses the assignment and flashes "Asset is in maintenance; clear the maintenance status first." It does not silently override admin-set states.
-- **Booking URLs hit directly while flag is off** → 404 from the blueprint's `before_request` guard. No template ever links to them, so this is the misbehaving-bookmark case only.
-
-## 7 — Testing
-
-There is no test suite in this repo (per CLAUDE.md). Verification is manual, captured as a checklist in the implementation plan:
-
-1. Fresh DB → seed script creates exactly the four accounts with correct roles.
-2. Admin can assign Omar an asset; status flips to `in_use`; audit log row exists.
-3. Admin clears the assignment; status flips back to `available`; audit log row exists.
-4. Employee `/inventory` shows the holder column and has no Reserve button.
-5. Employee files a ticket → both admin inboxes receive the notification (or the log line, if SMTP not configured).
-6. Sidebar contains no booking links for any role; `/bookings` returns 404.
-7. Flipping `BOOKINGS_ENABLED = True` restores all booking links and pages without further code changes.
-
-## 8 — Files touched
-
-- `config.py` — add `BOOKINGS_ENABLED = False`.
-- `app.py` — context processor exposing `bookings_enabled`; remove `/register` from public routes (admin-only via Employees page).
-- `init_db.py` (or new `seed_users.py`) — insert the four accounts.
-- `routes/bookings.py` — `before_request` 404 guard.
-- `routes/dashboard.py` — skip booking queries when flag off; add "assets assigned to me" query for employees.
-- `routes/inventory.py` — split employee view (read-only catalog) from admin view; add "Assign to" handling with status flip + audit.
-- `routes/reports.py` — skip booking queries when flag off.
-- `templates/base.html` — gate the three booking sidebar links.
-- `templates/dashboard.html` — gate booking tiles; add "assets assigned to me" tile for employees.
-- `templates/inventory/*.html` — read-only catalog template; admin form gains "Assign to" dropdown.
-- `templates/reports/inventory.html` — gate booking blocks.
-- `email_service.py` — confirm `notify_new_ticket` sends to both admin emails (extend if currently single-recipient).
-
-## 9 — Reversibility
-
-Every UI removal is a flag check, not a deletion. To restore the full experience:
+A new helper in `email_service.py`:
 
 ```python
-# config.py
-BOOKINGS_ENABLED = True
+def notify_affected_user(ticket, kind):
+    """kind ∈ {'created', 'resolved'}. No-op if affected_user_email is blank."""
 ```
 
-…and the booking sidebar, dashboard tiles, reports blocks, and `/bookings/*` routes all light up again. The schema, data, and route logic were never touched.
+Subjects:
+
+- `created` → `[SAIL] Ticket #TKT-0123 received: <title>`
+- `resolved` → `[SAIL] Ticket #TKT-0123 resolved: <title>`
+
+Body includes the asset tag + model, the ticket title, the description (for `created`) or the resolution text (for `resolved`), and a "Reply to this email" line. The reply lands in the team's shared mailbox, not SAIL — comment threading from external email is out of scope for this version.
+
+Existing internal-team notification helpers (assignment, comments) are unchanged.
+
+## 5 — Error handling
+
+- **No `SAIL_SMTP_PASSWORD`** — `email_service` already logs and returns. Behavior unchanged.
+- **Affected email field blank** — `notify_affected_user` returns silently. The ticket is still created and worked normally; the team just doesn't email anyone.
+- **Invalid email format** — caught by HTML5 form validation; the form rejects submission before hitting the route.
+- **Booking URL hit while flag is off** — 404 from the blueprint guard.
+- **Resolution field blank on resolve** — form rejects submission with "Resolution required when resolving a ticket."
+
+## 6 — Testing
+
+No automated test suite (per CLAUDE.md). Manual verification checklist, to be expanded into the implementation plan:
+
+1. Fresh DB → seed inserts the four accounts, all with `role='admin'`.
+2. `/register` is no longer reachable from the nav.
+3. Open an asset detail page → "Raise New Issue" button is visible → form pre-populates `asset_id`.
+4. Submit the form with an affected_user_email → ticket created, log shows email send (or actual send if SMTP configured).
+5. Resolve the ticket with a resolution note → second email sent to the same address.
+6. Re-open the asset's detail page → the ticket appears in Issue History with status `resolved` and the resolution text.
+7. Sidebar contains no booking links; `/bookings` returns 404.
+8. Flipping `BOOKINGS_ENABLED = True` restores everything booking-related with no other change.
+
+## 7 — Files touched
+
+- `schema.sql` — add the two `tickets` columns.
+- `init_db.py` (or a new `seed_users.py`) — insert the four accounts as `role='admin'`.
+- `config.py` — `BOOKINGS_ENABLED = False`.
+- `app.py` — context processor for `bookings_enabled`; remove the public `/register` route from the nav.
+- `routes/bookings.py` — `before_request` 404 guard.
+- `routes/inventory.py` — asset detail page with issue-history section.
+- `routes/tickets.py` — accept `?asset_id=` query param; require `resolution` on resolve transition; trigger affected-user emails.
+- `routes/dashboard.py` — control-team tiles; gate booking queries.
+- `routes/reports.py` — gate booking queries.
+- `templates/base.html` — gate booking sidebar links; rename app sections if needed.
+- `templates/dashboard.html` — single-role dashboard.
+- `templates/inventory/detail.html` — issue history section + "Raise New Issue" button.
+- `templates/tickets/form.html` — affected-user fields, asset preselection.
+- `templates/tickets/detail.html` — show affected user in header.
+- `templates/reports/inventory.html` — gate booking blocks.
+- `email_service.py` — `notify_affected_user(ticket, kind)`.
+
+## 8 — Reversibility
+
+The booking module is gated, not deleted. The two new ticket columns are nullable. Reverting this entire spec is `git revert` of the implementation commits — no destructive schema migrations.
