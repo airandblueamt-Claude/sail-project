@@ -371,7 +371,98 @@ def print_summary(plan):
     print(f"  Rows w/ \"Found Not in App\": {plan['found_not_in_app']}")
 
 
-# ── Entry point (DB write path stubbed for now) ─────────────────────────────
+# ── DB writer ───────────────────────────────────────────────────────────────
+
+
+def write_to_db(plan):
+    """Wipe + reload assets, equipment_models, categories, locations.
+
+    Single transaction via database.get_db(). On any error the
+    context manager rolls back so the DB is unchanged.
+    """
+    with get_db() as conn:
+        # 1. Wipe in FK-safe order. Bookings/tickets are empty (verified in spec).
+        conn.execute("DELETE FROM assets")
+        conn.execute("DELETE FROM equipment_models")
+        conn.execute("DELETE FROM locations")
+        conn.execute("DELETE FROM categories")
+        # Reset autoincrement counters so IDs start clean.
+        conn.execute(
+            "DELETE FROM sqlite_sequence WHERE name IN "
+            "('assets','equipment_models','locations','categories')"
+        )
+
+        # 2. Categories.
+        cat_ids = {}
+        for name in sorted(plan["categories"]):
+            cur = conn.execute(
+                "INSERT INTO categories (name) VALUES (?)", (name,)
+            )
+            cat_ids[name] = cur.lastrowid
+
+        # 3. Locations.
+        loc_ids = {}
+        for code, (label, is_storage) in sorted(plan["locations"].items()):
+            cur = conn.execute(
+                "INSERT INTO locations (code, label, is_storage) VALUES (?, ?, ?)",
+                (code, label, is_storage),
+            )
+            loc_ids[code] = cur.lastrowid
+
+        # 4. Equipment models.
+        model_ids = {}
+        for key, m in plan["models"].items():
+            cur = conn.execute(
+                """INSERT INTO equipment_models
+                       (category_id, name, specifications, image_path, is_bookable)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    cat_ids[m["category"]],
+                    m["name"],
+                    m["description"],
+                    m["image"],
+                    is_bookable_for(m["category"]),
+                ),
+            )
+            model_ids[key] = cur.lastrowid
+
+        # 5. Assets.
+        for a in plan["assets"]:
+            conn.execute(
+                """INSERT INTO assets
+                       (asset_tag, equipment_model_id, location_id,
+                        serial_number, condition, status,
+                        holder_name, remark, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    a["asset_tag"],
+                    model_ids[a["model_key"]],
+                    loc_ids[a["loc_code"]],
+                    a["serial_number"],
+                    a["condition"],
+                    a["status"],
+                    a["holder_name"],
+                    a["remark"],
+                    a["notes"],
+                ),
+            )
+
+        # 6. Invariant check inside the transaction. A mismatch raises and
+        #    the context manager rolls everything back.
+        n_assets = conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+        if n_assets != len(plan["assets"]):
+            raise RuntimeError(
+                f"asset count mismatch: inserted {n_assets}, "
+                f"plan had {len(plan['assets'])}"
+            )
+        status_total = sum(plan["status_counter"].values())
+        if status_total != n_assets:
+            raise RuntimeError(
+                f"status counts ({status_total}) != asset count ({n_assets})"
+            )
+
+
+# ── Entry point ─────────────────────────────────────────────────────────────
 
 
 def main():
@@ -395,8 +486,12 @@ def main():
         print("\n--dry-run: no DB writes performed")
         return
 
-    # Task 4 wires up the actual DB write.
-    sys.exit("DB write path not yet implemented — re-run with --dry-run for now")
+    print("\nBacking up DB before destructive write...")
+    backup_db()
+
+    print("Writing to DB...")
+    write_to_db(plan)
+    print("Done.")
 
 
 if __name__ == "__main__":
