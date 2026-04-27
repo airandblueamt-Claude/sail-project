@@ -181,20 +181,4 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_table_record ON audit_log(table_name, record_id);
 CREATE INDEX IF NOT EXISTS idx_audit_date         ON audit_log(created_at);
 
--- ── Equipment agreements / licenses ────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS equipment_agreements (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    model_id        INTEGER NOT NULL REFERENCES equipment_models(id) ON DELETE CASCADE,
-    agreement_type  TEXT    NOT NULL,           -- 'Warranty', 'Support Contract', 'Software License', 'Subscription'
-    provider        TEXT,                       -- vendor name
-    start_date      TEXT,                       -- ISO YYYY-MM-DD
-    end_date        TEXT,                       -- ISO YYYY-MM-DD
-    notes           TEXT,
-    created_at      TEXT    DEFAULT (datetime('now')),
-    updated_at      TEXT    DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_agreements_model    ON equipment_agreements(model_id);
-CREATE INDEX IF NOT EXISTS idx_agreements_end_date ON equipment_agreements(end_date);
-CREATE INDEX IF NOT EXISTS idx_agreements_type     ON equipment_agreements(agreement_type);
 

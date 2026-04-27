@@ -93,21 +93,6 @@ def inventory():
                 (start, end)).fetchone()[0],
         }
 
-        agreements_expiring = conn.execute("""
-            SELECT ea.agreement_type, ea.provider, ea.end_date, em.name as eq_name, em.brand
-            FROM equipment_agreements ea
-            JOIN equipment_models em ON ea.model_id = em.id
-            WHERE ea.end_date >= date('now') AND ea.end_date <= date('now', '+30 days')
-            ORDER BY ea.end_date
-        """).fetchall()
-        agreements_expired = conn.execute("""
-            SELECT ea.agreement_type, ea.provider, ea.end_date, em.name as eq_name, em.brand
-            FROM equipment_agreements ea
-            JOIN equipment_models em ON ea.model_id = em.id
-            WHERE ea.end_date < date('now')
-            ORDER BY ea.end_date DESC LIMIT 20
-        """).fetchall()
-
     if fmt == 'csv':
         rows = [
             ['SECTION', 'KEY', 'VALUE'],
@@ -133,9 +118,7 @@ def inventory():
                            totals=totals, history=history,
                            status_breakdown=status_breakdown,
                            condition_breakdown=condition_breakdown,
-                           category_breakdown=category_breakdown,
-                           agreements_expiring=agreements_expiring,
-                           agreements_expired=agreements_expired)
+                           category_breakdown=category_breakdown)
 
 
 # ── Ticket report ─────────────────────────────────────────────────────
@@ -291,7 +274,7 @@ def tickets():
 # Order matters — lookup/reference tables first so cross-sheet navigation is intuitive.
 EXPORT_TABLES = [
     'categories', 'locations', 'departments', 'employees',
-    'equipment_models', 'assets', 'equipment_agreements',
+    'equipment_models', 'assets',
     'tickets', 'ticket_comments', 'audit_log',
 ]
 

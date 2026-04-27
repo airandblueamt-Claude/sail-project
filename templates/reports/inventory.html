@@ -85,43 +85,5 @@
     </div>
 </div>
 
-{% if agreements_expired or agreements_expiring %}
-<div class="section">
-    <h3>Agreements</h3>
-    {% if agreements_expired %}
-    <h4 style="margin:12px 0 6px;color:var(--danger,#d33)">Expired</h4>
-    <table class="data-table">
-        <thead><tr><th>Equipment</th><th>Type</th><th>Provider</th><th>End Date</th></tr></thead>
-        <tbody>
-            {% for a in agreements_expired %}
-            <tr>
-                <td>{{ a.eq_name }}{% if a.brand %} ({{ a.brand }}){% endif %}</td>
-                <td>{{ a.agreement_type }}</td>
-                <td>{{ a.provider or '—' }}</td>
-                <td>{{ a.end_date }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
-    {% if agreements_expiring %}
-    <h4 style="margin:12px 0 6px;">Expiring within 30 days</h4>
-    <table class="data-table">
-        <thead><tr><th>Equipment</th><th>Type</th><th>Provider</th><th>End Date</th></tr></thead>
-        <tbody>
-            {% for a in agreements_expiring %}
-            <tr>
-                <td>{{ a.eq_name }}{% if a.brand %} ({{ a.brand }}){% endif %}</td>
-                <td>{{ a.agreement_type }}</td>
-                <td>{{ a.provider or '—' }}</td>
-                <td>{{ a.end_date }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
-</div>
-{% endif %}
-
 <script>lucide.createIcons();</script>
 {% endblock %}

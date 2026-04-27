@@ -50,7 +50,7 @@ The schema draws a hard line between product lines and physical units:
 - **`assets`** = individual physical units with their own `asset_tag` (`SAIL-0001`), serial, location, `condition`, and `status`. `qty_represented > 1` lets one asset row stand for a bulk lot that isn't worth tagging individually.
 - **Tickets attach to `assets`** (optionally). The ticket system is the primary user-facing workflow.
 
-Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comments`, `equipment_agreements` (warranty/license/support), `issue_categories`, and `audit_log`.
+Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comments`, `issue_categories`, and `audit_log`.
 
 ### Database access pattern
 
@@ -85,4 +85,4 @@ Branding: both `static/amt-logo.png` and `static/amt-logo-white.png` are the red
 
 ## Design docs
 
-`docs/superpowers/specs/` holds design specs; `docs/superpowers/plans/` holds implementation plans (one file per feature, dated). Check these before starting significant new features — recent work: `equipment_agreements` and the ticket kanban/SLA board.
+`docs/superpowers/specs/` holds design specs; `docs/superpowers/plans/` holds implementation plans (one file per feature, dated). Check these before starting significant new features — recent work: the ticket kanban/SLA board.
