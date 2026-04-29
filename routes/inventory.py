@@ -354,7 +354,84 @@ def edit_asset(asset_id):
             "SELECT id, code, label FROM locations ORDER BY code"
         ).fetchall()
 
-        # POST handling lands here in Task 2.
+        if request.method == 'POST':
+            status = request.form.get('status', '')
+            condition = request.form.get('condition', '')
+            location_id_raw = request.form.get('location_id', '')
+            serial = request.form.get('serial_number', '').strip() or None
+            qty_raw = request.form.get('qty_represented', '')
+            notes = request.form.get('notes', '').strip() or None
+
+            submitted = {
+                'status': status,
+                'condition': condition,
+                'location_id': int(location_id_raw) if location_id_raw.isdigit() else None,
+                'serial_number': serial or '',
+                'qty_represented': qty_raw,
+                'notes': notes or '',
+            }
+
+            def _reject(msg):
+                flash(msg, 'error')
+                return render_template('inventory/edit_asset.html',
+                                       asset=asset, locations=locations,
+                                       values=submitted,
+                                       statuses=STATUS_VALUES,
+                                       conditions=CONDITION_VALUES)
+
+            if status not in STATUS_VALUES:
+                return _reject('Invalid status.')
+            if condition not in CONDITION_VALUES:
+                return _reject('Invalid condition.')
+
+            try:
+                qty = int(qty_raw)
+                if qty < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return _reject('Quantity must be a whole number greater than zero.')
+
+            if location_id_raw:
+                if not location_id_raw.isdigit():
+                    return _reject('Invalid location.')
+                location_id = int(location_id_raw)
+                loc_exists = conn.execute(
+                    "SELECT 1 FROM locations WHERE id = ?", (location_id,)
+                ).fetchone()
+                if not loc_exists:
+                    return _reject('Selected location no longer exists.')
+            else:
+                location_id = None
+
+            new_values = {
+                'status': status,
+                'condition': condition,
+                'location_id': location_id,
+                'serial_number': serial,
+                'qty_represented': qty,
+                'notes': notes,
+            }
+            changes = {col: (asset[col], new_val)
+                       for col, new_val in new_values.items()
+                       if asset[col] != new_val}
+
+            if not changes:
+                flash('No changes.', 'info')
+                return redirect(url_for('inventory.asset_detail', asset_id=asset_id))
+
+            set_clause = ', '.join(f"{col} = ?" for col in changes)
+            params = [new_values[col] for col in changes] + [asset_id]
+            conn.execute(
+                f"UPDATE assets SET {set_clause}, updated_at = datetime('now') WHERE id = ?",
+                params,
+            )
+            for col, (old, new) in changes.items():
+                log_audit(conn, 'assets', asset_id, 'update',
+                          field_name=col, old_value=old, new_value=new,
+                          changed_by=g.user['id'])
+
+            flash(f'Asset {asset["asset_tag"]} updated.', 'success')
+            return redirect(url_for('inventory.asset_detail', asset_id=asset_id))
 
         # GET: prefill from the current asset row.
         values = {
