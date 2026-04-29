@@ -39,7 +39,7 @@ If `asset_id` does not exist, flash `"Asset not found."` and redirect to `/inven
 
 | Field | Column | Input type | Validation |
 |---|---|---|---|
-| Status | `assets.status` | `<select>` | enum: `available / in_use / reserved / checked_out / maintenance / decommissioned` |
+| Status | `assets.status` | `<select>` | enum: `available / in_use / reserved / checked_out / maintenance / decommissioned / missing` |
 | Condition | `assets.condition` | `<select>` | enum: `good / fair / damaged / decommissioned` |
 | Location | `assets.location_id` | `<select>` (loaded from `locations`) | optional; empty value → `NULL` |
 | Serial number | `assets.serial_number` | `<input type="text">` | trimmed; empty → `NULL` |
