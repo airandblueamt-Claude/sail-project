@@ -326,6 +326,53 @@ def asset_detail(asset_id):
                            asset=asset, tickets=tickets)
 
 
+@inventory_bp.route('/asset/<int:asset_id>/edit', methods=['GET', 'POST'])
+def edit_asset(asset_id):
+    """Admin/manager/technician edit form for a single asset row."""
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard.index'))
+
+    STATUS_VALUES = ('available', 'in_use', 'reserved', 'checked_out',
+                     'maintenance', 'decommissioned', 'missing')
+    CONDITION_VALUES = ('good', 'fair', 'damaged', 'decommissioned')
+
+    with get_db() as conn:
+        asset = conn.execute("""
+            SELECT a.*, em.name AS model_name, em.brand, em.model_number,
+                   c.name AS category_name
+            FROM assets a
+            JOIN equipment_models em ON a.equipment_model_id = em.id
+            LEFT JOIN categories c ON em.category_id = c.id
+            WHERE a.id = ?
+        """, (asset_id,)).fetchone()
+        if not asset:
+            flash('Asset not found.', 'error')
+            return redirect(url_for('inventory.manage_assets'))
+
+        locations = conn.execute(
+            "SELECT id, code, label FROM locations ORDER BY code"
+        ).fetchall()
+
+        # POST handling lands here in Task 2.
+
+        # GET: prefill from the current asset row.
+        values = {
+            'status': asset['status'],
+            'condition': asset['condition'],
+            'location_id': asset['location_id'],
+            'serial_number': asset['serial_number'] or '',
+            'qty_represented': asset['qty_represented'],
+            'notes': asset['notes'] or '',
+        }
+
+    return render_template('inventory/edit_asset.html',
+                           asset=asset, locations=locations,
+                           values=values,
+                           statuses=STATUS_VALUES,
+                           conditions=CONDITION_VALUES)
+
+
 @inventory_bp.route('/assets/register/<int:model_id>', methods=['GET', 'POST'])
 def register_asset(model_id):
     if g.user['role'] not in ('admin', 'manager', 'technician'):

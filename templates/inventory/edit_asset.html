@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Edit {{ asset.asset_tag }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('inventory.manage_assets') }}" class="breadcrumb">Assets</a>
+        <span class="breadcrumb-sep">/</span>
+        <a href="{{ url_for('inventory.asset_detail', asset_id=asset.id) }}" class="breadcrumb">{{ asset.asset_tag }}</a>
+        <h2>Edit Asset</h2>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h4>Asset (read-only)</h4>
+        <dl class="detail-list">
+            <dt>Asset Tag</dt><dd>{{ asset.asset_tag }}</dd>
+            <dt>Model</dt><dd>{{ asset.model_name }}{% if asset.model_number %} ({{ asset.model_number }}){% endif %}</dd>
+            <dt>Brand</dt><dd>{{ asset.brand or '—' }}</dd>
+            <dt>Category</dt><dd>{{ asset.category_name or '—' }}</dd>
+            <dt>Created</dt><dd>{{ asset.created_at[:10] if asset.created_at else '—' }}</dd>
+            <dt>Last updated</dt><dd>{{ asset.updated_at[:10] if asset.updated_at else '—' }}</dd>
+        </dl>
+        <p class="muted" style="font-size:0.9em;margin-top:12px">
+            Asset tag and equipment model are immutable. To reclassify or rename, contact an administrator.
+        </p>
+    </div>
+
+    <form method="post" class="form-card">
+        <h4>Editable fields</h4>
+
+        <div class="form-row">
+            <label>Status *</label>
+            <select name="status" required class="input">
+                {% for s in statuses %}
+                <option value="{{ s }}" {% if values.status == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Condition *</label>
+            <select name="condition" required class="input">
+                {% for c in conditions %}
+                <option value="{{ c }}" {% if values.condition == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Location</label>
+            <select name="location_id" class="input">
+                <option value="">-- Not Set --</option>
+                {% for l in locations %}
+                <option value="{{ l.id }}" {% if values.location_id == l.id %}selected{% endif %}>
+                    {{ l.code }}{% if l.label %} ({{ l.label }}){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Serial Number</label>
+            <input type="text" name="serial_number" value="{{ values.serial_number }}" class="input"
+                   placeholder="Manufacturer serial number">
+        </div>
+
+        <div class="form-row">
+            <label>Quantity Represented *</label>
+            <input type="number" name="qty_represented" min="1" value="{{ values.qty_represented }}" required class="input">
+            <p class="muted" style="margin-top:4px;font-size:0.9em">
+                For bulk lots that aren't individually tagged. Use 1 for a single physical unit.
+            </p>
+        </div>
+
+        <div class="form-row">
+            <label>Notes</label>
+            <textarea name="notes" rows="3" class="input" placeholder="Any additional notes...">{{ values.notes }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save changes</button>
+            <a href="{{ url_for('inventory.asset_detail', asset_id=asset.id) }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
