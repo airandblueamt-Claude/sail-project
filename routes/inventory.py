@@ -333,6 +333,8 @@ def edit_asset(asset_id):
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard.index'))
 
+    # Keep in sync with the assets.status / assets.condition CHECK constraints
+    # in schema.sql — drift fails inserts silently-looking but fatally.
     STATUS_VALUES = ('available', 'in_use', 'reserved', 'checked_out',
                      'maintenance', 'decommissioned', 'missing')
     CONDITION_VALUES = ('good', 'fair', 'damaged', 'decommissioned')
