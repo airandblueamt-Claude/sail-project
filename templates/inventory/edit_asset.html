@@ -33,7 +33,7 @@
             <label>Status *</label>
             <select name="status" required class="input">
                 {% for s in statuses %}
-                <option value="{{ s }}" {% if values.status == s %}selected{% endif %}>{{ s }}</option>
+                <option value="{{ s }}" {% if values.status == s %}selected{% endif %}>{{ s.replace('_', ' ').title() }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -42,7 +42,7 @@
             <label>Condition *</label>
             <select name="condition" required class="input">
                 {% for c in conditions %}
-                <option value="{{ c }}" {% if values.condition == c %}selected{% endif %}>{{ c }}</option>
+                <option value="{{ c }}" {% if values.condition == c %}selected{% endif %}>{{ c.replace('_', ' ').title() }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -50,7 +50,7 @@
         <div class="form-row">
             <label>Location</label>
             <select name="location_id" class="input">
-                <option value="">-- Not Set --</option>
+                <option value="" {% if not values.location_id %}selected{% endif %}>-- Not Set --</option>
                 {% for l in locations %}
                 <option value="{{ l.id }}" {% if values.location_id == l.id %}selected{% endif %}>
                     {{ l.code }}{% if l.label %} ({{ l.label }}){% endif %}
