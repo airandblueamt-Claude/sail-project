@@ -8,6 +8,11 @@
         <p class="muted">{{ asset.model_name }}{% if asset.brand %} — {{ asset.brand }}{% endif %}</p>
     </div>
     <div>
+        {% if g.user.role in ('admin', 'manager', 'technician') %}
+        <a href="{{ url_for('inventory.edit_asset', asset_id=asset.id) }}" class="btn btn-ghost">
+            <i data-lucide="pencil"></i> Edit asset
+        </a>
+        {% endif %}
         <a href="{{ url_for('tickets.new_ticket', asset_id=asset.id) }}" class="btn btn-primary">
             <i data-lucide="alert-circle"></i> Raise New Issue
         </a>
