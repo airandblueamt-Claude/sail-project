@@ -49,6 +49,7 @@ The application is a single Flask app with blueprint-based routing, a SQLite dat
 - Unified story-history timeline on the ticket detail page (§3.3)
 - Scheduled report digests (§3.4)
 - VM deployment and operational model (§3.5)
+- Asset data onboarding — repeatable Excel/CSV import workflow (§3.8)
 - WhatsApp channel (Phase 2, §4)
 - Local AI agent on the HPC cluster (Phase 3, §5)
 
@@ -99,6 +100,27 @@ Data linkage is already there (`tickets.asset_id`). Phase 1 surfaces it better: 
 Implementation of the existing spec `docs/superpowers/specs/2026-04-13-ticket-board-sla-design.md`. No design changes. Folded into Phase 1 because the board is the most visible deliverable and the SLA overdue flag drives a valuable subset of alerting (the overdue compute is reused as an alert trigger in §3.1).
 
 **Acceptance:** the existing plan's task list runs to completion; the overdue flag is usable by the alert rules in §3.1 (a rule can specify "only if overdue").
+
+### 3.8 Asset data onboarding
+
+The equipment data owner (presently Mehmood's team) is preparing the authoritative equipment spreadsheet. Phase 1 needs a repeatable, auditable path from that spreadsheet into SAIL — both for the initial load and for ongoing updates as the spreadsheet evolves. Today the repo has `clean_equipment.py` + `init_db.py` that handle a first-time load only; there is no safe update path (they would wipe the DB), and no bulk-import for individual `assets` with serial numbers.
+
+**Deliverables:**
+
+- Refactor the existing import scripts into an idempotent `import_equipment.py` that upserts into `equipment_models` by a stable natural key (brand + model name + spec signature), logging inserted / updated / rejected row counts.
+- New `import_assets.py` accepting a CSV of `(tag, serial, location, model_name, condition, status)` and upserting into `assets`, with per-row error reporting.
+- Admin UI pages at `/admin/import/equipment` and `/admin/import/assets` that wrap the scripts — upload file, preview parsed rows, confirm, run, view results. No import runs without an admin clicking through.
+- Every import writes a summary row to `audit_log` (operator, filename, row counts, rejected rows).
+- One-paragraph rollback procedure in `deploy/README.md`: stop service → restore latest pre-import backup → restart → verify.
+
+**Acceptance:**
+
+- An updated equipment spreadsheet can be re-uploaded without losing ticket, booking, comment, or audit data already in the system.
+- An individual-asset CSV of ~500 rows imports in under 10 seconds with a per-row error report for any rejected rows.
+- Every import is traceable in `audit_log` back to operator, source file, and row counts.
+- A failed or incorrect import can be undone by restoring the pre-import backup in under 10 minutes per the runbook.
+
+**Why this is S0 (runs first).** Meaningful testing of every other Phase-1 feature — alert routing, digests, story history, ticket↔asset UI — depends on having real asset data in the system. Landing the onboarding path first means the rest of Phase 1 is built and evaluated against real AMT equipment, not placeholder rows.
 
 ---
 
@@ -527,14 +549,15 @@ The following per-feature design specs get written and committed under `docs/sup
 
 | # | Spec | Depends on |
 |---|---|---|
+| S0 | `YYYY-MM-DD-asset-data-onboarding-design.md` — §3.8 idempotent equipment & asset imports, admin UI, rollback | — |
 | S1 | `YYYY-MM-DD-alert-rules-design.md` — §3.1 routing table, admin UI, notification dispatcher refactor | — |
 | S2 | `YYYY-MM-DD-ticket-checklists-design.md` — §3.2 table, UI, progress bar | — |
 | S3 | `YYYY-MM-DD-story-history-design.md` — §3.3 merged timeline query and renderer | — |
 | S4 | `YYYY-MM-DD-report-digests-design.md` — §3.4 scheduler, templates, admin page | S1 (reuses recipient handling pattern) |
-| S5 | `YYYY-MM-DD-ticket-asset-ui-design.md` — §3.6 asset picker, asset-page ticket list, dashboard tile | — |
+| S5 | `YYYY-MM-DD-ticket-asset-ui-design.md` — §3.6 asset picker, asset-page ticket list, dashboard tile | S0 (wants real asset data to test against) |
 | S6 | `YYYY-MM-DD-deploy-vm-design.md` — §3.5 `deploy/` scaffolding, systemd units, nginx, install script, backup wiring | — |
 
-The kanban + SLA work (§3.7) already has its spec and plan from 2026-04-13 — it gets executed as part of Phase 1 without a new spec.
+S0 lands first because every other spec benefits from being built and evaluated against real AMT inventory data rather than placeholder rows. The kanban + SLA work (§3.7) already has its spec and plan from 2026-04-13 — it gets executed as part of Phase 1 without a new spec.
 
 **Phase 2 spec (written during Phase 1 so approvals can run in parallel):**
 
@@ -563,4 +586,5 @@ Each per-feature spec will add what this document deliberately omits: exact rout
 - [ ] Confirm HPC refresh expected-ready date with the HPC team (R4).
 - [ ] Confirm offsite backup destination with AMT IT ops (R8).
 - [ ] Provision the Phase 1 internal VM (hostname, DNS, internal TLS cert).
-- [ ] Start S1 (alert-rules) and S6 (deploy-vm) design specs in parallel — they have no dependencies on each other and unblock most of the rest.
+- [ ] Coordinate with the equipment data owner on the finalized spreadsheet format so S0 can be written against a stable schema.
+- [ ] Start S0 (asset-data-onboarding), S1 (alert-rules), and S6 (deploy-vm) design specs in parallel — no dependencies between them, and together they unblock most of the rest.
