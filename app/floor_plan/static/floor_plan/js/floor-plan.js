@@ -75,29 +75,29 @@ const DEFAULT_ZONES = {
     ]
   },
   'boardroom-1': {
-    id: 'Z-08', name: 'Boardroom A',
+    id: 'Z-08', name: 'Workshop 1',
     sub: 'West wing meeting room', type: 'meeting', typeLabel: 'Meeting',
     capacity: '8 seats', occupancy: 65, capSub: 'oval table',
-    desc: 'Smaller boardroom on the west wing. Used for client meetings, hiring panels, and program reviews.',
+    desc: 'Bookable workshop room. Used for hands-on sessions, design reviews, and small-team training.',
     assets: [
       ['Oval conference table', '1'], ['Executive chairs', '8'],
       ['Wall display (75")', '1'], ['Conference phone', '1']
     ]
   },
   'boardroom-2': {
-    id: 'Z-09', name: 'Boardroom B',
+    id: 'Z-09', name: 'Workshop 2',
     sub: 'West wing meeting room', type: 'meeting', typeLabel: 'Meeting',
     capacity: '6 seats', occupancy: 45, capSub: 'huddle format',
-    desc: 'Compact meeting room for 1:1s and small team syncs. Frosted-glass walls for privacy.',
+    desc: 'Bookable workshop room. Used for hands-on sessions, design reviews, and small-team training.',
     assets: [
       ['Round table', '1'], ['Chairs', '6'], ['Display (55")', '1'], ['Whiteboard', '1']
     ]
   },
   'conference-long': {
-    id: 'Z-10', name: 'Long Conference Room',
+    id: 'Z-10', name: 'Workshop 3',
     sub: 'West wing — large meeting', type: 'meeting', typeLabel: 'Meeting',
     capacity: '14 seats', occupancy: 70, capSub: 'long table',
-    desc: 'Largest west-side meeting room. Designed for workshops, all-hands sessions, and design reviews.',
+    desc: 'Bookable workshop room. Used for hands-on sessions, design reviews, and small-team training.',
     assets: [
       ['Long table (14-seat)', '1'], ['Mesh chairs', '14'],
       ['Dual displays (75")', '2'], ['Polycom system', '1'], ['Whiteboard wall', '1']
@@ -180,7 +180,7 @@ const DEFAULT_ZONES = {
     ]
   },
   'global-theater': {
-    id: 'Z-19', name: 'Global Theater',
+    id: 'Z-19', name: 'Theater',
     sub: 'Tiered amphitheater', type: 'meeting', typeLabel: 'Meeting',
     capacity: '60 seats', occupancy: 35, capSub: 'tiered seating',
     desc: 'Centerpiece amphitheater for all-hands events, partner showcases, and demo days. Tiered arcs face a stage with media wall.',
@@ -366,6 +366,95 @@ function showZone(key) {
   }
 
   renderAssets(z);
+
+  const room = BOOKABLE.get(key);
+  const headerEl = document.getElementById('d-name');
+  const oldBadge = headerEl.parentElement.querySelector('.fp-bookable-badge');
+  if (oldBadge) oldBadge.remove();
+  if (room) {
+    const badge = document.createElement('span');
+    badge.className = 'fp-bookable-badge';
+    badge.textContent = 'Bookable';
+    headerEl.insertAdjacentElement('afterend', badge);
+    renderRoomAssets(key);
+    renderBookButton(key);
+  } else {
+    clearRoomAssets();
+    clearBookButton();
+  }
+}
+
+function _emptyAssetMessage(text) {
+  const p = document.createElement('p');
+  p.className = 'fp-asset-empty';
+  p.textContent = text;
+  return p;
+}
+
+async function renderRoomAssets(zoneKey) {
+  const container = document.getElementById('zone-detail-extra');
+  container.replaceChildren(_emptyAssetMessage('Loading assets…'));
+  let list;
+  try {
+    const r = await fetch(`${API_BASE}/rooms/${encodeURIComponent(zoneKey)}/assets`);
+    if (!r.ok) {
+      container.replaceChildren(_emptyAssetMessage('No assets in this room.'));
+      return;
+    }
+    list = await r.json();
+  } catch (e) {
+    container.replaceChildren(_emptyAssetMessage('Could not load assets.'));
+    return;
+  }
+  if (!list.length) {
+    container.replaceChildren(_emptyAssetMessage('No assets in this room.'));
+    return;
+  }
+  const ul = document.createElement('ul');
+  ul.className = 'fp-asset-list';
+  ul.dataset.zone = zoneKey;
+  list.forEach(a => {
+    const li = document.createElement('li');
+    li.dataset.assetId = String(a.id);
+
+    const left = document.createElement('span');
+    left.textContent = (a.model_name || '') + (a.brand ? ' ' + a.brand : '');
+
+    const right = document.createElement('span');
+    right.className = 'asset-tag';
+    right.textContent = a.asset_tag || '';
+
+    li.appendChild(left);
+    li.appendChild(right);
+    ul.appendChild(li);
+  });
+  container.replaceChildren(ul);
+}
+
+function clearRoomAssets() {
+  const c = document.getElementById('zone-detail-extra');
+  if (c) c.replaceChildren();
+}
+
+function renderBookButton(zoneKey) {
+  const slot = document.getElementById('zone-detail-actions');
+  if (!slot) return;
+  slot.replaceChildren();
+  const btn = document.createElement('button');
+  btn.className = 'fp-book-btn';
+  btn.textContent = 'Request to book';
+  btn.addEventListener('click', () => openBookingModal(zoneKey));
+  slot.appendChild(btn);
+}
+
+function clearBookButton() {
+  const slot = document.getElementById('zone-detail-actions');
+  if (slot) slot.replaceChildren();
+}
+
+function openBookingModal(zoneKey) {
+  // Replaced in Task 11.
+  console.log('open booking modal', zoneKey);
 }
 
 function renderAssets(z) {
@@ -631,6 +720,24 @@ const STORAGE_KEY = 'sail-floor-pins-v1';
 
 // API base — Flask blueprint mounts at /floor-plan, API at /floor-plan/api
 const API_BASE = (window.SAIL_API_BASE || '/floor-plan/api');
+
+// Bookable rooms (server source of truth). Populated on page load.
+const BOOKABLE = new Map();   // zone_key -> {label, capacity, sail_location_id}
+
+async function loadBookableRooms() {
+  try {
+    const r = await fetch(`${API_BASE}/bookable-rooms`);
+    if (!r.ok) return;
+    const list = await r.json();
+    BOOKABLE.clear();
+    list.forEach(room => BOOKABLE.set(room.zone_key, room));
+    document.querySelectorAll('g.zone[data-z]').forEach(g => {
+      if (BOOKABLE.has(g.dataset.z)) g.classList.add('zone--bookable');
+    });
+  } catch (e) {
+    console.warn('bookable-rooms fetch failed', e);
+  }
+}
 
 // Local mirror used as offline fallback. Server is the source of truth when reachable.
 const memoryStore = {
@@ -1083,4 +1190,5 @@ document.getElementById('iso-import-file').addEventListener('change', e => {
     });
   }
   renderPins();
+  loadBookableRooms();
 })();

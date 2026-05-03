@@ -1084,3 +1084,61 @@
     letter-spacing: 1px;
     text-transform: uppercase;
   }
+
+/* Bookable room visual marker on the plan view */
+.zone--bookable .hit { stroke: var(--accent); stroke-width: 2; }
+.zone--bookable .label { fill: var(--accent); }
+
+/* Side-panel "Bookable" badge */
+.fp-bookable-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+}
+
+/* Asset list inside the side panel */
+.fp-asset-list {
+  margin-top: 12px;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line-faint);
+}
+.fp-asset-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-faint);
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fp-asset-list .asset-tag {
+  font-family: ui-monospace, monospace;
+  color: var(--ink-2);
+}
+.fp-asset-empty {
+  padding: 8px 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* "Request to book" button */
+.fp-book-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.fp-book-btn:hover { opacity: 0.9; }
+.fp-book-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
