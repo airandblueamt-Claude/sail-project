@@ -54,11 +54,46 @@ def test_post_booking_rejects_short_purpose(client):
     assert resp.status_code == 400
 
 
-def test_post_booking_rejects_assets_not_in_this_room(client):
-    # Asset id 3 lives in the Theater (loc 11), not Workshop 1
+def test_post_booking_accepts_assets_from_any_room(client):
+    """The 'must live in this room' rule was dropped — users describe what
+    they need, ops physically arranges the room when approving. Asset 3 is
+    in the Theater but the user can still request it for a Workshop-1
+    booking (ops will move it or substitute)."""
     resp = client.post("/floor-plan/api/bookings",
                        json=_payload(asset_ids=[1, 3]))
+    assert resp.status_code == 201, resp.data
+
+
+def test_post_booking_rejects_unknown_asset_id(client):
+    resp = client.post("/floor-plan/api/bookings",
+                       json=_payload(asset_ids=[1, 99999]))
     assert resp.status_code == 400
+    assert "do not exist" in resp.get_json()["error"]
+
+
+def test_post_booking_rejects_overlap(client, temp_sail_db):
+    # First booking 09:00-10:00 lands; second one with overlapping window
+    # on the same room+date must be rejected.
+    p1 = _payload(start_time="09:00", end_time="10:00")
+    r1 = client.post("/floor-plan/api/bookings", json=p1)
+    assert r1.status_code == 201, r1.data
+
+    p2 = _payload(start_time="09:30", end_time="10:30")
+    r2 = client.post("/floor-plan/api/bookings", json=p2)
+    assert r2.status_code == 400
+    assert "conflict" in r2.get_json()["error"].lower()
+
+
+def test_post_booking_allows_adjacent_times(client):
+    """Back-to-back bookings (one ends exactly when the next starts) are
+    not a conflict — the overlap check uses strict less-than."""
+    p1 = _payload(start_time="09:00", end_time="10:00")
+    r1 = client.post("/floor-plan/api/bookings", json=p1)
+    assert r1.status_code == 201, r1.data
+
+    p2 = _payload(start_time="10:00", end_time="11:00")
+    r2 = client.post("/floor-plan/api/bookings", json=p2)
+    assert r2.status_code == 201, r2.data
 
 
 def test_post_booking_writes_audit_row(client, temp_sail_db):

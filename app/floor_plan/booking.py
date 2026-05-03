@@ -125,6 +125,36 @@ def _build_description(room_label, location_code, p, asset_rows):
     return "\n".join(lines)
 
 
+def _times_overlap(s1, e1, s2, e2):
+    """Strict overlap on [s,e) HH:MM strings — adjacent (e==s) is allowed."""
+    return s1 < e2 and s2 < e1
+
+
+def _check_no_overlap(conn, room_label, date_str, start_time, end_time,
+                       exclude_ticket_id=None):
+    """Raise BookingError if another open/approved booking on the same room
+    + date overlaps the given time window."""
+    rows = conn.execute(
+        """SELECT id, ticket_number, description FROM tickets
+           WHERE title = ?
+             AND type = 'new_request'
+             AND status IN ('open', 'in_progress', 'waiting')""",
+        (f"Booking request: {room_label} on {date_str}",),
+    ).fetchall()
+    for r in rows:
+        if exclude_ticket_id and r["id"] == exclude_ticket_id:
+            continue
+        ex_start, ex_end = _parse_times_from_description(r["description"])
+        if not (ex_start and ex_end):
+            continue
+        if _times_overlap(start_time, end_time, ex_start, ex_end):
+            raise BookingError(
+                f"Time conflict: {r['ticket_number']} already covers "
+                f"{ex_start}–{ex_end} on {date_str}. "
+                f"Pick a different time."
+            )
+
+
 def create_booking_ticket(payload):
     """Validate + insert a ticket. Returns {ticket_id, ticket_number}.
 
@@ -150,16 +180,23 @@ def create_booking_ticket(payload):
         if loc is None:
             raise BookingError("Room is not configured.")
 
+        # Reject overlap with any existing open/approved booking on this
+        # room+date so two people can not double-book the same window.
+        _check_no_overlap(conn, room.label, p["date"], p["start_time"], p["end_time"])
+
+        # Verify each requested asset exists. We deliberately do NOT
+        # require the asset to live in the room — the user describes what
+        # they need; ops physically arranges the room when they approve.
         if p["asset_ids"]:
             placeholders = ",".join("?" * len(p["asset_ids"]))
             asset_rows = conn.execute(
                 f"""SELECT a.id, a.asset_tag, a.condition, em.name AS model_name
                     FROM assets a JOIN equipment_models em ON em.id = a.equipment_model_id
-                    WHERE a.id IN ({placeholders}) AND a.location_id = ?""",
-                (*p["asset_ids"], room.sail_location_id),
+                    WHERE a.id IN ({placeholders})""",
+                p["asset_ids"],
             ).fetchall()
             if len(asset_rows) != len(p["asset_ids"]):
-                raise BookingError("One or more assets are not in this room.")
+                raise BookingError("One or more assets do not exist.")
         else:
             asset_rows = []
 
@@ -290,6 +327,45 @@ def approve_booking(ticket_id):
             changed_by=actor_id,
         )
 
+        # Assign every requested asset to the submitter for the duration of
+        # the booking: status -> checked_out, assigned_to -> submitted_by.
+        # Each transition is audited so the history shows when the asset
+        # moved into / out of the user's hands.
+        assigned = []
+        asset_tags = _parse_assets_from_description(row["description"])
+        if asset_tags:
+            placeholders = ",".join("?" * len(asset_tags))
+            asset_rows = conn.execute(
+                f"""SELECT id, asset_tag, status, assigned_to
+                    FROM assets WHERE asset_tag IN ({placeholders})""",
+                asset_tags,
+            ).fetchall()
+            for a in asset_rows:
+                if a["status"] != "checked_out":
+                    conn.execute(
+                        "UPDATE assets SET status='checked_out', updated_at=datetime('now') WHERE id = ?",
+                        (a["id"],),
+                    )
+                    log_audit(
+                        conn, "assets", a["id"], "update",
+                        field_name="status",
+                        old_value=a["status"], new_value="checked_out",
+                        changed_by=actor_id,
+                    )
+                if a["assigned_to"] != row["submitted_by"]:
+                    conn.execute(
+                        "UPDATE assets SET assigned_to = ?, updated_at=datetime('now') WHERE id = ?",
+                        (row["submitted_by"], a["id"]),
+                    )
+                    log_audit(
+                        conn, "assets", a["id"], "update",
+                        field_name="assigned_to",
+                        old_value=str(a["assigned_to"]) if a["assigned_to"] is not None else None,
+                        new_value=str(row["submitted_by"]),
+                        changed_by=actor_id,
+                    )
+                assigned.append({"id": a["id"], "asset_tag": a["asset_tag"]})
+
         start_time, end_time = _parse_times_from_description(row["description"])
         result = {
             "ticket_id": ticket_id,
@@ -298,6 +374,7 @@ def approve_booking(ticket_id):
             "date": date_str,
             "start_time": start_time,
             "end_time": end_time,
+            "assets_assigned": assigned,
             "submitter": {
                 "id": row["submitted_by"],
                 "name": row["submitter_name"],
@@ -390,7 +467,8 @@ def close_booking(ticket_id, payload):
             asset_lookup = {
                 r["id"]: dict(r)
                 for r in conn.execute(
-                    f"""SELECT a.id, a.asset_tag, a.status, em.name AS model_name
+                    f"""SELECT a.id, a.asset_tag, a.status, a.assigned_to,
+                               em.name AS model_name
                         FROM assets a
                         JOIN equipment_models em ON em.id = a.equipment_model_id
                         WHERE a.id IN ({placeholders})""",
@@ -403,7 +481,7 @@ def close_booking(ticket_id, payload):
         else:
             asset_lookup = {}
 
-        # Apply asset status updates + audit each one
+        # Apply asset status updates + clear assignment + audit each one
         for r in cleaned:
             asset = asset_lookup[r["asset_id"]]
             new_status = RETURN_STATE_TO_ASSET_STATUS[r["state"]]
@@ -416,6 +494,19 @@ def close_booking(ticket_id, payload):
                     conn, "assets", r["asset_id"], "update",
                     field_name="status",
                     old_value=asset["status"], new_value=new_status,
+                    changed_by=actor_id,
+                )
+            # Whatever the return state, the asset is no longer with the user.
+            if asset.get("assigned_to") is not None:
+                conn.execute(
+                    "UPDATE assets SET assigned_to = NULL, updated_at = datetime('now') WHERE id = ?",
+                    (r["asset_id"],),
+                )
+                log_audit(
+                    conn, "assets", r["asset_id"], "update",
+                    field_name="assigned_to",
+                    old_value=str(asset["assigned_to"]),
+                    new_value=None,
                     changed_by=actor_id,
                 )
             enriched_returns.append({
