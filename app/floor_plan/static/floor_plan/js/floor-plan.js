@@ -990,18 +990,31 @@ const isoPinsEl = document.getElementById('iso-pins');
 const isoEmptyEl = document.getElementById('iso-empty');
 
 function renderPins() {
-  isoPinsEl.innerHTML = '';
-  SAIL_PINS.forEach(p => {
+  isoPinsEl.replaceChildren();
+  SAIL_PINS.forEach((p, i) => {
     const m = document.createElement('div');
-    m.className = 'pin-marker';
+    m.className = 'pin-marker t-' + (p.type || 'custom');
     m.dataset.key = p.id;
     m.style.left = p.x + '%';
     m.style.top = p.y + '%';
     if (p.id === isoActiveKey) m.classList.add('active');
-    m.innerHTML = `
-      <div class="pin-dot"></div>
-      <div class="pin-label">${escapeHtml(p.name || 'Untitled')}<span class="pin-label-id">${p.id}</span></div>
-    `;
+
+    const dot = document.createElement('div');
+    dot.className = 'pin-dot';
+    // Show the pin's numeric suffix (P-01 -> "1") inside the chip
+    const match = String(p.id || '').match(/(\d+)$/);
+    dot.textContent = match ? String(parseInt(match[1], 10)) : String(i + 1);
+    m.appendChild(dot);
+
+    const label = document.createElement('div');
+    label.className = 'pin-label';
+    label.textContent = p.name || 'Untitled';
+    const id = document.createElement('span');
+    id.className = 'pin-label-id';
+    id.textContent = p.id;
+    label.appendChild(id);
+    m.appendChild(label);
+
     isoPinsEl.appendChild(m);
     bindPin(m, p);
   });
