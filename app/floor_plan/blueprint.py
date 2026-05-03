@@ -29,6 +29,22 @@ def index():
     return render_template("floor_plan/index.html")
 
 
+@floor_plan_bp.route("/bookings", methods=["GET"])
+def bookings_page():
+    """Ops view: list of all booking requests with approve / close actions.
+
+    Permission: admin or manager. Other roles get redirected back to the
+    floor plan with a flash message — same pattern as the rest of sail's
+    admin pages.
+    """
+    from flask import g, redirect, url_for, flash
+    user = getattr(g, "user", None)
+    if not user or user.get("role") not in ("admin", "manager"):
+        flash("Access denied.", "error")
+        return redirect(url_for("floor_plan.index"))
+    return render_template("floor_plan/bookings.html")
+
+
 # ---------- API: pins ----------
 
 @floor_plan_bp.route("/api/pins", methods=["GET"])
@@ -258,23 +274,58 @@ def api_list_bookings():
         params.extend(statuses)
     sql += " ORDER BY t.id DESC"
 
+    # Build label -> zone_key map from bookable_rooms (floor_plan.db)
+    label_to_zone = {r.label: r.zone_key for r in BookableRoom.query.all()}
+
     with get_db() as conn:
         rows = conn.execute(sql, params).fetchall()
 
+        # Collect every asset_tag mentioned across all bookings, resolve in one go
+        all_tags = set()
+        parsed = []
+        for r in rows:
+            tags = _parse_assets_from_description(r["description"])
+            parsed.append(tags)
+            all_tags.update(tags)
+        tag_to_asset = {}
+        if all_tags:
+            placeholders = ",".join("?" * len(all_tags))
+            asset_rows = conn.execute(
+                f"""SELECT a.id, a.asset_tag, a.status, em.name AS model_name
+                    FROM assets a
+                    JOIN equipment_models em ON em.id = a.equipment_model_id
+                    WHERE a.asset_tag IN ({placeholders})""",
+                tuple(all_tags),
+            ).fetchall()
+            tag_to_asset = {ar["asset_tag"]: dict(ar) for ar in asset_rows}
+
     out = []
-    for r in rows:
+    for r, tags in zip(rows, parsed):
         room_label, date_str = _parse_booking_title(r["title"])
         start_time, end_time = _parse_times_from_description(r["description"])
-        asset_tags = _parse_assets_from_description(r["description"])
+        assets = []
+        for tag in tags:
+            a = tag_to_asset.get(tag)
+            if a:
+                assets.append({
+                    "id": a["id"],
+                    "asset_tag": a["asset_tag"],
+                    "model_name": a["model_name"],
+                    "status": a["status"],
+                })
+            else:
+                # Asset removed from sail.db since the booking — keep the tag
+                assets.append({"id": None, "asset_tag": tag, "model_name": "", "status": "unknown"})
         out.append({
             "id": r["id"],
             "ticket_number": r["ticket_number"],
             "status": r["status"],
             "room_label": room_label,
+            "zone_key": label_to_zone.get(room_label or "", ""),
             "date": date_str,
             "start_time": start_time,
             "end_time": end_time,
-            "asset_tags": asset_tags,
+            "assets": assets,
             "submitter": {
                 "name": r["submitter_name"],
                 "email": r["submitter_email"],

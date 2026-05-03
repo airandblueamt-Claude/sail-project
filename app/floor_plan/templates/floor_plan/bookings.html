@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+{% block title %}Bookings — SAIL{% endblock %}
+{% block extra_head %}
+<style>
+.bk-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.bk-tabs button {
+  background: transparent; border: none; padding: 10px 18px;
+  font: inherit; cursor: pointer; color: var(--text-muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.bk-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.bk-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.bk-table th, .bk-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+.bk-table th { font-weight: 500; color: var(--text-muted); font-size: 13px; background: var(--bg); }
+.bk-table tr:last-child td { border-bottom: none; }
+.bk-table tr:hover td { background: var(--accent-light); }
+.bk-table .room { font-weight: 500; }
+.bk-table .when { color: var(--text-muted); font-size: 13px; }
+.bk-table .actions { white-space: nowrap; }
+.bk-empty { padding: 32px; text-align: center; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+.bk-status {
+  display: inline-block; padding: 2px 10px; font-size: 11px; font-weight: 500;
+  border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.bk-status.open       { background: var(--yellow-bg); color: var(--yellow); }
+.bk-status.in_progress{ background: var(--accent-light); color: var(--accent); }
+.bk-status.closed     { background: var(--green-bg); color: var(--green); }
+.bk-asset-chip { display: inline-block; padding: 2px 8px; margin: 2px 4px 2px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); }
+.bk-modal { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; }
+.bk-modal[hidden] { display: none; }
+.bk-modal-bg { position: absolute; inset: 0; background: rgba(0,0,0,0.45); }
+.bk-modal-card { position: relative; background: var(--bg-card); width: min(640px, 92vw); max-height: 90vh; overflow: auto; border-radius: 12px; box-shadow: var(--shadow-lg); padding: 24px; }
+.bk-modal-card h2 { margin: 0 0 4px 0; font-size: 18px; }
+.bk-modal-card .sub { color: var(--text-muted); font-size: 13px; margin-bottom: 16px; }
+.bk-return-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--border); }
+.bk-return-row:first-child { border-top: none; }
+.bk-return-row .a-name { font-weight: 500; font-size: 14px; }
+.bk-return-row .a-tag { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-muted); }
+.bk-return-row .states { display: flex; gap: 6px; }
+.bk-return-row .states label { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; }
+.bk-return-row .states label.good { color: var(--green); }
+.bk-return-row .states label.damaged { color: var(--red); }
+.bk-return-row .states label.missing { color: var(--orange); }
+.bk-return-row .states input { margin: 0; }
+.bk-return-row .states input:checked + span { font-weight: 600; }
+.bk-return-row .notes { grid-column: 1 / -1; }
+.bk-return-row .notes input { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font: inherit; background: var(--bg); color: var(--text); }
+.bk-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.bk-error { background: var(--red-bg); color: var(--red); padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Bookings</h2>
+    <p class="breadcrumb">Room reservation requests · approve and verify asset returns</p>
+  </div>
+</div>
+
+<div class="bk-tabs" role="tablist">
+  <button class="on" data-tab="active">Active</button>
+  <button data-tab="closed">Closed</button>
+  <button data-tab="all">All</button>
+</div>
+
+<div id="bk-content"></div>
+
+<!-- Close-and-verify modal -->
+<div id="bk-close-modal" class="bk-modal" hidden>
+  <div class="bk-modal-bg" data-close></div>
+  <div class="bk-modal-card" role="dialog" aria-labelledby="bk-close-title">
+    <h2 id="bk-close-title">Close booking & verify returns</h2>
+    <p class="sub" id="bk-close-sub"></p>
+    <div id="bk-close-error" class="bk-error" hidden></div>
+    <form id="bk-close-form">
+      <input type="hidden" name="ticket_id">
+      <div id="bk-close-rows"></div>
+      <div class="bk-modal-footer">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Close booking</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  const API = "{{ url_for('floor_plan.api_list_bookings').rstrip('/') }}";
+  const content = document.getElementById('bk-content');
+  let currentTab = 'active';
+
+  function emptyMsg(text) {
+    const d = document.createElement('div');
+    d.className = 'bk-empty';
+    d.textContent = text;
+    return d;
+  }
+
+  document.querySelectorAll('.bk-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.bk-tabs button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      currentTab = btn.dataset.tab;
+      load();
+    });
+  });
+
+  async function load() {
+    content.replaceChildren(emptyMsg('Loading…'));
+    let q;
+    if (currentTab === 'active') q = '';
+    else if (currentTab === 'closed') q = '?status=closed';
+    else q = '?status=all';
+    let list;
+    try {
+      const r = await fetch(API + q);
+      if (!r.ok) throw new Error('http ' + r.status);
+      list = await r.json();
+    } catch (e) {
+      content.replaceChildren(emptyMsg('Could not load bookings.'));
+      return;
+    }
+    if (!list.length) {
+      content.replaceChildren(emptyMsg('No bookings to show.'));
+      return;
+    }
+    renderTable(list);
+  }
+
+  function renderTable(list) {
+    const table = document.createElement('table');
+    table.className = 'bk-table';
+
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    ['Ticket','Room','When','Requester','Assets','Status'].forEach(text => {
+      const th = document.createElement('th');
+      th.textContent = text;
+      trh.appendChild(th);
+    });
+    const thAct = document.createElement('th');
+    thAct.className = 'actions';
+    thAct.textContent = 'Actions';
+    trh.appendChild(thAct);
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    list.forEach(b => tbody.appendChild(renderRow(b)));
+    table.appendChild(tbody);
+
+    content.replaceChildren(table);
+  }
+
+  function renderRow(b) {
+    const tr = document.createElement('tr');
+    tr.dataset.ticketId = String(b.id);
+
+    const tdNum = document.createElement('td');
+    tdNum.style.fontFamily = 'ui-monospace, monospace';
+    tdNum.style.fontSize = '13px';
+    tdNum.textContent = b.ticket_number || '';
+    tr.appendChild(tdNum);
+
+    const tdRoom = document.createElement('td');
+    tdRoom.className = 'room';
+    tdRoom.textContent = b.room_label || '—';
+    tr.appendChild(tdRoom);
+
+    const tdWhen = document.createElement('td');
+    tdWhen.className = 'when';
+    tdWhen.textContent = `${b.date || ''} · ${b.start_time || ''}–${b.end_time || ''}`;
+    tr.appendChild(tdWhen);
+
+    const tdSub = document.createElement('td');
+    tdSub.textContent = (b.submitter && b.submitter.name) || '';
+    tr.appendChild(tdSub);
+
+    const tdAssets = document.createElement('td');
+    if (!b.assets || !b.assets.length) {
+      tdAssets.textContent = '—';
+      tdAssets.style.color = 'var(--text-muted)';
+    } else {
+      b.assets.forEach(a => {
+        const chip = document.createElement('span');
+        chip.className = 'bk-asset-chip';
+        chip.textContent = a.asset_tag;
+        chip.title = a.model_name || '';
+        tdAssets.appendChild(chip);
+      });
+    }
+    tr.appendChild(tdAssets);
+
+    const tdStatus = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = 'bk-status ' + (b.status || '');
+    pill.textContent = (b.status || '').replace('_', ' ');
+    tdStatus.appendChild(pill);
+    tr.appendChild(tdStatus);
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'actions';
+    if (b.status === 'open') {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-primary';
+      btn.textContent = 'Approve';
+      btn.addEventListener('click', () => approve(b));
+      tdAction.appendChild(btn);
+    } else if (b.status === 'in_progress') {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm';
+      btn.textContent = 'Close & verify';
+      btn.addEventListener('click', () => openCloseModal(b));
+      tdAction.appendChild(btn);
+    } else {
+      const t = document.createElement('span');
+      t.style.color = 'var(--text-muted)';
+      t.style.fontSize = '12px';
+      t.textContent = b.closed_at ? `Closed ${b.closed_at.slice(0, 10)}` : 'Closed';
+      tdAction.appendChild(t);
+    }
+    tr.appendChild(tdAction);
+
+    return tr;
+  }
+
+  async function approve(b) {
+    if (!confirm(`Approve booking ${b.ticket_number} for ${b.room_label}?`)) return;
+    try {
+      const r = await fetch(`/floor-plan/api/bookings/${b.id}/approve`, { method: 'POST' });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({error: 'Failed'}));
+        alert(err.error || 'Approve failed');
+        return;
+      }
+      load();
+    } catch (e) { alert('Network error.'); }
+  }
+
+  function openCloseModal(b) {
+    const modal = document.getElementById('bk-close-modal');
+    const sub = document.getElementById('bk-close-sub');
+    const rows = document.getElementById('bk-close-rows');
+    const err = document.getElementById('bk-close-error');
+    err.hidden = true; err.textContent = '';
+    document.getElementById('bk-close-form').elements['ticket_id'].value = String(b.id);
+
+    sub.textContent = `${b.ticket_number} · ${b.room_label} · ${b.date} ${b.start_time}–${b.end_time}`;
+    rows.replaceChildren();
+
+    if (!b.assets || !b.assets.length) {
+      const empty = document.createElement('p');
+      empty.style.color = 'var(--text-muted)';
+      empty.textContent = 'No assets were requested for this booking. Click Close to finalise.';
+      rows.appendChild(empty);
+    } else {
+      b.assets.forEach(a => {
+        if (!a.id) return;   // skip orphan tags
+        rows.appendChild(renderReturnRow(a));
+      });
+    }
+    modal.hidden = false;
+  }
+
+  function renderReturnRow(a) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bk-return-row';
+    wrap.dataset.assetId = String(a.id);
+
+    const left = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'a-name';
+    name.textContent = a.model_name || 'Asset';
+    const tag = document.createElement('div');
+    tag.className = 'a-tag';
+    tag.textContent = a.asset_tag;
+    left.appendChild(name);
+    left.appendChild(tag);
+    wrap.appendChild(left);
+
+    const states = document.createElement('div');
+    states.className = 'states';
+    [
+      ['returned_good', 'Good', 'good'],
+      ['damaged', 'Damaged', 'damaged'],
+      ['missing', 'Missing', 'missing'],
+    ].forEach(([value, label, cls], idx) => {
+      const lbl = document.createElement('label');
+      lbl.className = cls;
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = `state-${a.id}`;
+      radio.value = value;
+      if (idx === 0) radio.checked = true;
+      const txt = document.createElement('span');
+      txt.textContent = label;
+      lbl.appendChild(radio);
+      lbl.appendChild(txt);
+      states.appendChild(lbl);
+    });
+    wrap.appendChild(states);
+
+    const notesWrap = document.createElement('div');
+    notesWrap.className = 'notes';
+    const notes = document.createElement('input');
+    notes.type = 'text';
+    notes.placeholder = 'Optional notes (visible to requester in their email)';
+    notes.dataset.assetId = String(a.id);
+    notes.dataset.kind = 'notes';
+    notesWrap.appendChild(notes);
+    wrap.appendChild(notesWrap);
+
+    return wrap;
+  }
+
+  function closeModal() {
+    document.getElementById('bk-close-modal').hidden = true;
+  }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('#bk-close-modal [data-close]')) closeModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  document.getElementById('bk-close-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const ticketId = form.elements['ticket_id'].value;
+    const err = document.getElementById('bk-close-error');
+    err.hidden = true; err.textContent = '';
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+
+    const returns = Array.from(document.querySelectorAll('#bk-close-rows .bk-return-row')).map(row => {
+      const aid = Number(row.dataset.assetId);
+      const checked = row.querySelector(`input[name="state-${aid}"]:checked`);
+      const notesEl = row.querySelector('input[data-kind="notes"]');
+      return {
+        asset_id: aid,
+        state: checked ? checked.value : 'returned_good',
+        notes: notesEl ? notesEl.value : '',
+      };
+    });
+
+    try {
+      const r = await fetch(`/floor-plan/api/bookings/${ticketId}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returns }),
+      });
+      const body = await r.json();
+      if (!r.ok) {
+        err.textContent = body.error || 'Close failed.';
+        err.hidden = false;
+        return;
+      }
+      closeModal();
+      load();
+    } catch (_) {
+      err.textContent = 'Network error.';
+      err.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  load();
+})();
+</script>
+{% endblock %}
