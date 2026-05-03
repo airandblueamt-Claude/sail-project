@@ -149,6 +149,45 @@ def api_bookable_rooms():
     return jsonify([r.to_dict() for r in rooms])
 
 
+@floor_plan_bp.route("/api/rooms/<zone_key>/assets", methods=["GET"])
+def api_room_assets(zone_key):
+    """List assets in the physical location backing this bookable room.
+
+    Crosses databases: `bookable_rooms` is in floor_plan.db (SQLAlchemy),
+    `assets` lives in sail.db (raw sqlite via database.get_db()).
+    """
+    room = BookableRoom.query.filter_by(zone_key=zone_key, is_active=1).first()
+    if room is None:
+        abort(404, description=f"No bookable room for zone '{zone_key}'.")
+
+    # Late import so the test fixture's monkeypatch on database.DB_PATH lands first
+    from database import get_db
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT a.id, a.asset_tag, a.status, a.condition,
+                   em.name AS model_name, em.brand
+            FROM assets a
+            JOIN equipment_models em ON em.id = a.equipment_model_id
+            WHERE a.location_id = ?
+            ORDER BY em.name, a.asset_tag
+            """,
+            (room.sail_location_id,),
+        ).fetchall()
+
+    return jsonify([
+        {
+            "id": r["id"],
+            "asset_tag": r["asset_tag"],
+            "status": r["status"],
+            "condition": r["condition"],
+            "model_name": r["model_name"],
+            "brand": r["brand"],
+        }
+        for r in rows
+    ])
+
+
 # ---------- Healthcheck ----------
 
 @floor_plan_bp.route("/healthz", methods=["GET"])
