@@ -31,6 +31,9 @@
             <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if request.endpoint == 'tickets.my_tickets' %}active{% endif %}">
                 <i data-lucide="ticket"></i> My Tickets
             </a></li>
+            <li><a href="{{ url_for('floor_plan.index') }}" class="{% if request.blueprint == 'floor_plan' %}active{% endif %}">
+                <i data-lucide="map"></i> Floor plan
+            </a></li>
             <li><a href="{{ url_for('help.guide') }}" class="{% if request.blueprint == 'help' %}active{% endif %}">
                 <i data-lucide="help-circle"></i> How It Works
             </a></li>

@@ -111,6 +111,7 @@ def create_app():
     from routes.help import help_bp
     from routes.reports import reports_bp
     from routes.issue_categories import issue_categories_bp
+    from app.floor_plan import floor_plan_bp, init_floor_plan
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(inventory_bp, url_prefix='/inventory')
@@ -119,6 +120,8 @@ def create_app():
     app.register_blueprint(help_bp, url_prefix='/help')
     app.register_blueprint(reports_bp, url_prefix='/reports')
     app.register_blueprint(issue_categories_bp, url_prefix='/issue-categories')
+    app.register_blueprint(floor_plan_bp, url_prefix='/floor-plan')
+    init_floor_plan(app)
 
     return app
 
