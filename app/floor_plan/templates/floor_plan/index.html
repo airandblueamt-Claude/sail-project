@@ -561,8 +561,8 @@
 
       <label>Date <input name="date" type="date" required></label>
       <div class="fp-row">
-        <label>Start <input name="start_time" type="time" min="07:00" max="16:00" step="900" required></label>
-        <label>End <input name="end_time" type="time" min="07:00" max="16:00" step="900" required></label>
+        <label>Start <select name="start_time" id="fp-start-select" required></select></label>
+        <label>End <select name="end_time" id="fp-end-select" required></select></label>
       </div>
       <label>Attendees <input name="attendees" type="number" min="1" value="1" required></label>
       <p id="fp-attendees-warning" class="fp-attendees-warning" hidden></p>

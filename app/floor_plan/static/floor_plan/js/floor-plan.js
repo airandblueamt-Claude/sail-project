@@ -452,6 +452,33 @@ function clearBookButton() {
   if (slot) slot.replaceChildren();
 }
 
+// Lab hours / slot config — keep in sync with booking.py (LAB_OPEN, LAB_CLOSE, SLOT_MINUTES)
+const LAB_OPEN_MIN = 7 * 60;
+const LAB_CLOSE_MIN = 16 * 60;
+const SLOT_MIN = 15;
+
+function _formatSlot(min) {
+  const h = String(Math.floor(min / 60)).padStart(2, '0');
+  const m = String(min % 60).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function _populateTimeSlots(selectEl, min, max, defaultValue) {
+  selectEl.replaceChildren();
+  for (let t = min; t <= max; t += SLOT_MIN) {
+    const opt = document.createElement('option');
+    opt.value = _formatSlot(t);
+    // 12-hour display for friendlier reading
+    const h24 = Math.floor(t / 60);
+    const m = t % 60;
+    const ampm = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+    opt.textContent = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+    selectEl.appendChild(opt);
+  }
+  if (defaultValue) selectEl.value = defaultValue;
+}
+
 async function openBookingModal(zoneKey) {
   const modal = document.getElementById('fp-booking-modal');
   const form = document.getElementById('fp-booking-form');
@@ -459,6 +486,8 @@ async function openBookingModal(zoneKey) {
   const errorBox = document.getElementById('fp-booking-error');
   const subtitleEl = document.getElementById('fp-modal-subtitle');
   const attWarn = document.getElementById('fp-attendees-warning');
+  const startSel = document.getElementById('fp-start-select');
+  const endSel = document.getElementById('fp-end-select');
 
   form.reset();
   errorBox.hidden = true;
@@ -477,9 +506,24 @@ async function openBookingModal(zoneKey) {
   form.elements['date'].value = today;
   form.elements['date'].min = today;
 
-  // Default times: 09:00 → 10:00, with lab-hours bounds + 15-min step (set in HTML)
-  form.elements['start_time'].value = '09:00';
-  form.elements['end_time'].value = '10:00';
+  // Time slots: start can be 07:00..15:45, end can be 07:15..16:00 (must be > start)
+  _populateTimeSlots(startSel, LAB_OPEN_MIN, LAB_CLOSE_MIN - SLOT_MIN, '09:00');
+  _populateTimeSlots(endSel, LAB_OPEN_MIN + SLOT_MIN, LAB_CLOSE_MIN, '10:00');
+  // Keep end > start: when start changes, restrict end to slots after the new start
+  startSel.onchange = () => {
+    const startMins = parseInt(startSel.value.split(':')[0]) * 60 + parseInt(startSel.value.split(':')[1]);
+    Array.from(endSel.options).forEach(opt => {
+      const t = parseInt(opt.value.split(':')[0]) * 60 + parseInt(opt.value.split(':')[1]);
+      opt.hidden = t <= startMins;
+    });
+    // If currently selected end is now invalid, bump to first visible
+    const curEnd = parseInt(endSel.value.split(':')[0]) * 60 + parseInt(endSel.value.split(':')[1]);
+    if (curEnd <= startMins) {
+      const next = Array.from(endSel.options).find(o => !o.hidden);
+      if (next) endSel.value = next.value;
+    }
+  };
+  startSel.onchange();   // sync end-options to default start
 
   // Attendee-vs-capacity live warning
   attWarn.hidden = true;
@@ -546,16 +590,13 @@ async function renderModalAssetChecks(zoneKey, checks) {
   });
 
   list.forEach(a => {
-    const isAvail = a.status === 'available';
     const lbl = document.createElement('label');
-    if (!isAvail) lbl.classList.add('disabled');
 
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.name = 'asset_ids';
     cb.value = String(a.id);
     cb.id = `fp-asset-${a.id}`;
-    cb.disabled = !isAvail;
     lbl.appendChild(cb);
 
     lbl.appendChild(document.createTextNode(' ' + (a.model_name || '') + (a.brand ? ' ' + a.brand : '') + ' '));
@@ -565,12 +606,12 @@ async function renderModalAssetChecks(zoneKey, checks) {
     tag.textContent = a.asset_tag || '';
     lbl.appendChild(tag);
 
-    if (!isAvail) {
-      const status = document.createElement('span');
-      status.className = 'asset-status ' + (a.status || '');
-      status.textContent = (a.status || '').replace('_', ' ');
-      lbl.appendChild(status);
-    }
+    // Always show status so users can see the state, but never disable —
+    // ops team handles availability when they triage the request.
+    const status = document.createElement('span');
+    status.className = 'asset-status ' + (a.status || '');
+    status.textContent = (a.status || '').replace('_', ' ');
+    lbl.appendChild(status);
 
     checks.appendChild(lbl);
   });
