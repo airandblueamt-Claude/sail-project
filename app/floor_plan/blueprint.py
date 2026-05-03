@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .db import db
 from .models import Pin, BookableRoom
-from .booking import create_booking_ticket, BookingError
+from .booking import create_booking_ticket, approve_booking, BookingError
 
 
 floor_plan_bp = Blueprint(
@@ -237,6 +237,25 @@ def api_create_booking():
             return jsonify({"error": msg}), 404
         return jsonify({"error": msg}), 400
     return jsonify(result), 201
+
+
+@floor_plan_bp.route("/api/bookings/<int:ticket_id>/approve", methods=["POST"])
+def api_approve_booking(ticket_id):
+    """Ops/admin marks a booking request approved.
+
+    Flips the ticket from open to in_progress, audit-logs the transition,
+    and emails the requester.
+    """
+    try:
+        result = approve_booking(ticket_id)
+    except BookingError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            return jsonify({"error": msg}), 404
+        if "forbidden" in msg.lower() or "login required" in msg.lower():
+            return jsonify({"error": msg}), 403
+        return jsonify({"error": msg}), 400
+    return jsonify(result), 200
 
 
 # ---------- Healthcheck ----------

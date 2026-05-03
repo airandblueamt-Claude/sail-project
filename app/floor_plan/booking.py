@@ -1,15 +1,28 @@
 """Booking -> ticket bridge.
 
-This is the ONE place where the floor_plan blueprint writes to sail.db.
-It validates the booking payload, fetches the room metadata from
-floor_plan.db, then opens a transaction against sail.db to insert the
-ticket and audit row in a single commit.
+This is the place where the floor_plan blueprint writes to sail.db.
+It validates the booking payload, fetches room metadata from
+floor_plan.db, then opens a transaction against sail.db for ticket
+inserts / state changes / audit rows.
 """
+import re
 from datetime import date as _date, time as _time
 from flask import session
 
 from database import get_db, log_audit
-from .models import BookableRoom
+from .db import db
+from .models import BookableRoom, BookingReturn
+
+
+# "Booking request: {room.label} on {YYYY-MM-DD}" — match for parsing
+TITLE_RE = re.compile(r"^Booking request:\s+(.+)\s+on\s+(\d{4}-\d{2}-\d{2})$")
+ALLOWED_RETURN_STATES = {"returned_good", "damaged", "missing"}
+RETURN_STATE_TO_ASSET_STATUS = {
+    "returned_good": "available",
+    "damaged": "damaged",
+    "missing": "missing",
+}
+APPROVER_ROLES = ("admin", "manager")
 
 
 PURPOSE_MIN = 10
@@ -185,6 +198,128 @@ def create_booking_ticket(payload):
     )
 
     return {"ticket_id": ticket_id, "ticket_number": ticket_number}
+
+
+def _check_role(allowed):
+    """Look up the current session user; raise BookingError if role not allowed.
+
+    Returns (user_id, role).
+    """
+    user_id = session.get("user_id")
+    if not user_id:
+        raise BookingError("Login required.")
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, role FROM employees WHERE id = ? AND is_active = 1",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        raise BookingError("User not found.")
+    if row["role"] not in allowed:
+        raise BookingError(f"Forbidden: requires role {sorted(allowed)}.")
+    return row["id"], row["role"]
+
+
+def _parse_booking_title(title):
+    """Return (room_label, date_str) or (None, None) if not a booking title."""
+    if not title:
+        return None, None
+    m = TITLE_RE.match(title)
+    return (m.group(1), m.group(2)) if m else (None, None)
+
+
+def _parse_times_from_description(description):
+    """Best-effort extraction of 'HH:MM - HH:MM' from the description block."""
+    if not description:
+        return None, None
+    m = re.search(r"Time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})", description)
+    return (m.group(1), m.group(2)) if m else (None, None)
+
+
+def _parse_assets_from_description(description):
+    """Return list of asset_tags mentioned in the 'Assets requested' block.
+
+    Description format written by _build_description:
+        Assets requested:
+          - SAIL-0001 - Display (good)
+          - SAIL-0002 - Display (good)
+    """
+    if not description or "Assets requested:" not in description:
+        return []
+    block = description.split("Assets requested:", 1)[1]
+    return re.findall(r"-\s+(SAIL-\S+)\s+-\s+", block)
+
+
+def approve_booking(ticket_id):
+    """Flip a booking ticket from 'open' to 'in_progress'.
+
+    Permission: admin or manager. Returns the resolved booking metadata
+    (room_label, date, submitter, ...) for the caller to use in emails.
+    """
+    actor_id, actor_role = _check_role(APPROVER_ROLES)
+
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT t.id, t.ticket_number, t.title, t.description, t.status,
+                      t.type, t.submitted_by,
+                      e.name AS submitter_name, e.email AS submitter_email
+               FROM tickets t
+               LEFT JOIN employees e ON e.id = t.submitted_by
+               WHERE t.id = ?""",
+            (ticket_id,),
+        ).fetchone()
+        if row is None:
+            raise BookingError(f"Ticket {ticket_id} not found.")
+
+        room_label, date_str = _parse_booking_title(row["title"])
+        if not room_label:
+            raise BookingError(f"Ticket {ticket_id} is not a booking ticket.")
+        if row["status"] != "open":
+            raise BookingError(
+                f"Ticket {row['ticket_number']} is already {row['status']}; "
+                f"cannot approve."
+            )
+
+        conn.execute(
+            "UPDATE tickets SET status='in_progress', assigned_to = ? WHERE id = ?",
+            (actor_id, ticket_id),
+        )
+        log_audit(
+            conn, "tickets", ticket_id, "update",
+            field_name="status", old_value="open", new_value="in_progress",
+            changed_by=actor_id,
+        )
+
+        start_time, end_time = _parse_times_from_description(row["description"])
+        result = {
+            "ticket_id": ticket_id,
+            "ticket_number": row["ticket_number"],
+            "room_label": room_label,
+            "date": date_str,
+            "start_time": start_time,
+            "end_time": end_time,
+            "submitter": {
+                "id": row["submitted_by"],
+                "name": row["submitter_name"],
+                "email": row["submitter_email"],
+            },
+        }
+
+    # Email after commit
+    try:
+        from email_service import notify_booking_approved
+        notify_booking_approved(
+            ticket={"id": ticket_id, "ticket_number": result["ticket_number"]},
+            submitter=result["submitter"],
+            room_label=result["room_label"],
+            date=result["date"],
+            start_time=result["start_time"] or "",
+            end_time=result["end_time"] or "",
+        )
+    except Exception:  # pragma: no cover
+        pass
+
+    return result
 
 
 def _send_booking_emails(*, ticket_id, ticket_number, title, description,
