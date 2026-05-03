@@ -1111,6 +1111,60 @@
 }
 .fp-cart-summary.has-items { color: var(--accent); font-weight: 500; }
 
+/* Equipment-catalog picker inside the booking modal */
+.fp-equip-row {
+  display: grid;
+  grid-template-columns: 1fr 90px auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.fp-equip-select, .fp-equip-qty {
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: inherit;
+}
+.fp-equip-list {
+  list-style: none;
+  margin: 0 0 8px 0;
+  padding: 0;
+}
+.fp-equip-list:empty { display: none; }
+.fp-equip-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.fp-equip-list li .equip-name {
+  flex: 1;
+  color: var(--text);
+}
+.fp-equip-list li .equip-qty {
+  margin: 0 12px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.fp-equip-list li button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.fp-equip-list li button:hover { color: var(--bad); }
+
 /* Asset search picker inside the booking modal */
 .fp-asset-search {
   display: block;

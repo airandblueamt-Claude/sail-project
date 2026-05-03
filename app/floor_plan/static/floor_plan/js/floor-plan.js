@@ -548,8 +548,9 @@ async function openBookingModal(zoneKey) {
   form.elements['date'].onchange = () => loadPendingCount(zoneKey, form.elements['date'].value);
   loadPendingCount(zoneKey, today);
 
-  // Asset picker — search-driven, room's assets pre-loaded as suggestions
-  await _initAssetPicker(zoneKey);
+  // Equipment-catalog picker — user picks model + qty; ops allocates
+  // specific assets at approval time.
+  await _initEquipmentPicker();
 
   modal.hidden = false;
 }
@@ -572,38 +573,114 @@ async function loadPendingCount(zoneKey, date) {
   }
 }
 
-// Modal-state: which asset ids are currently in the user's basket, plus a
-// cache of resolved asset metadata so chips can render their labels.
-const _selectedAssets = new Map();   // id -> {asset_tag, model_name, brand, status}
-let _searchSeq = 0;
+// Modal-state: equipment-catalog picker.
+// _equipmentRequests: model_id -> {model_id, name, brand, total_count, quantity}
+const _equipmentRequests = new Map();
+let _equipmentCatalog = [];   // cached catalog list
 
-async function _initAssetPicker(zoneKey) {
-  _selectedAssets.clear();
-  const search = document.getElementById('fp-asset-search');
-  if (search) search.value = '';
-  _renderSelectedChips();
+async function _initEquipmentPicker() {
+  _equipmentRequests.clear();
+  _renderEquipmentList();
   _updateCartSummary();
-  // Default load: the room's own assets, so the user sees what is already
-  // in the room before deciding whether to add others.
-  let list = [];
+
+  const sel = document.getElementById('fp-equip-select');
+  const qty = document.getElementById('fp-equip-qty');
+  const addBtn = document.getElementById('fp-equip-add');
+  if (!sel || !qty || !addBtn) return;
+
+  // Load catalog once per modal-open
   try {
-    const r = await fetch(`${API_BASE}/zones/${encodeURIComponent(zoneKey)}/assets`);
-    if (r.ok) {
-      const body = await r.json();
-      list = body.assets || [];
-    }
-  } catch (_) {}
-  _renderResults(list, list.length === 0
-    ? 'No assets currently in this room — start typing to find any equipment in inventory.'
-    : null);
-  if (search && !search._wired) {
-    search._wired = true;
-    let timer = null;
-    search.addEventListener('input', () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => _runAssetSearch(search.value, zoneKey), 250);
+    const r = await fetch(`${API_BASE}/equipment-catalog`);
+    if (r.ok) _equipmentCatalog = await r.json();
+  } catch (_) {
+    _equipmentCatalog = [];
+  }
+
+  // Populate the dropdown (group by category)
+  sel.replaceChildren();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '— pick equipment —';
+  sel.appendChild(placeholder);
+  const byCategory = {};
+  _equipmentCatalog.forEach(m => {
+    (byCategory[m.category || 'Other'] = byCategory[m.category || 'Other'] || []).push(m);
+  });
+  Object.keys(byCategory).sort().forEach(cat => {
+    const og = document.createElement('optgroup');
+    og.label = cat;
+    byCategory[cat].forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = String(m.id);
+      const labelParts = [m.name];
+      if (m.brand) labelParts.push(m.brand);
+      labelParts.push(`(${m.total_count} in stock)`);
+      opt.textContent = labelParts.join(' · ');
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+
+  // Reset qty
+  qty.value = '1';
+
+  // Wire add button (idempotent)
+  if (!addBtn._wired) {
+    addBtn._wired = true;
+    addBtn.addEventListener('click', () => {
+      const mid = parseInt(sel.value, 10);
+      const q = parseInt(qty.value, 10);
+      if (!mid || !q || q < 1) return;
+      const model = _equipmentCatalog.find(m => m.id === mid);
+      if (!model) return;
+      const existing = _equipmentRequests.get(mid);
+      const newQty = (existing ? existing.quantity : 0) + q;
+      if (newQty > model.total_count) {
+        alert(`Only ${model.total_count} ${model.name} in inventory total. ` +
+              `Even when free, you cannot ask for more than that.`);
+        return;
+      }
+      _equipmentRequests.set(mid, {
+        model_id: mid,
+        name: model.name,
+        brand: model.brand,
+        total_count: model.total_count,
+        quantity: newQty,
+      });
+      _renderEquipmentList();
+      _updateCartSummary();
+      sel.value = '';
+      qty.value = '1';
     });
   }
+}
+
+function _renderEquipmentList() {
+  const ul = document.getElementById('fp-equip-list');
+  if (!ul) return;
+  ul.replaceChildren();
+  _equipmentRequests.forEach((er, mid) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.className = 'equip-name';
+    name.textContent = er.name + (er.brand ? ' · ' + er.brand : '');
+    const q = document.createElement('span');
+    q.className = 'equip-qty';
+    q.textContent = `× ${er.quantity}`;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Remove ' + er.name);
+    x.textContent = '×';
+    x.addEventListener('click', () => {
+      _equipmentRequests.delete(mid);
+      _renderEquipmentList();
+      _updateCartSummary();
+    });
+    li.appendChild(name);
+    li.appendChild(q);
+    li.appendChild(x);
+    ul.appendChild(li);
+  });
 }
 
 async function _runAssetSearch(q, zoneKey) {
@@ -720,12 +797,14 @@ function _renderSelectedChips() {
 function _updateCartSummary() {
   const summary = document.getElementById('fp-cart-summary');
   if (!summary) return;
-  const n = _selectedAssets.size;
-  if (n === 0) {
-    summary.textContent = 'No assets selected yet';
+  let totalUnits = 0, kinds = 0;
+  _equipmentRequests.forEach(er => { totalUnits += er.quantity; kinds += 1; });
+  if (kinds === 0) {
+    summary.textContent = 'No equipment added yet';
     summary.classList.remove('has-items');
   } else {
-    summary.textContent = `${n} asset${n === 1 ? '' : 's'} added to your booking`;
+    summary.textContent =
+      `${kinds} item${kinds === 1 ? '' : 's'} · ${totalUnits} unit${totalUnits === 1 ? '' : 's'}`;
     summary.classList.add('has-items');
   }
 }
@@ -760,7 +839,9 @@ document.getElementById('fp-booking-form').addEventListener('submit', async (e) 
     end_time: fd.get('end_time'),
     attendees: Number(fd.get('attendees')),
     purpose: fd.get('purpose'),
-    asset_ids: Array.from(_selectedAssets.keys()),
+    equipment_requests: Array.from(_equipmentRequests.values()).map(er => ({
+      model_id: er.model_id, quantity: er.quantity,
+    })),
   };
 
   try {

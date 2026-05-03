@@ -576,13 +576,16 @@
       </label>
 
       <fieldset class="fp-asset-pick">
-        <legend>Assets — what equipment do you need?</legend>
-        <div id="fp-selected-chips" class="fp-selected-chips" hidden></div>
-        <input type="search" id="fp-asset-search" class="fp-asset-search"
-               placeholder="Search inventory by tag, model, or brand…"
-               autocomplete="off" />
-        <div id="fp-asset-results" class="fp-asset-results"></div>
-        <p class="fp-cart-summary" id="fp-cart-summary">No assets selected yet</p>
+        <legend>Equipment — what do you need? (optional)</legend>
+        <div class="fp-equip-row">
+          <select id="fp-equip-select" class="fp-equip-select">
+            <option value="">— pick equipment —</option>
+          </select>
+          <input id="fp-equip-qty" class="fp-equip-qty" type="number" min="1" value="1" />
+          <button type="button" id="fp-equip-add" class="btn btn-sm btn-primary">Add</button>
+        </div>
+        <ul id="fp-equip-list" class="fp-equip-list"></ul>
+        <p class="fp-cart-summary" id="fp-cart-summary">No equipment added yet</p>
       </fieldset>
 
       <div class="fp-form-error" id="fp-booking-error" hidden></div>
