@@ -1102,6 +1102,14 @@
   display: flex; align-items: center; gap: 8px;
   margin: 0; padding: 4px 0; font-size: 13px;
 }
+.fp-cart-summary {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-faint);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.fp-cart-summary.has-items { color: var(--accent); font-weight: 500; }
 .fp-modal-footer {
   display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;
 }

@@ -597,6 +597,7 @@ async function renderModalAssetChecks(zoneKey, checks) {
     cb.name = 'asset_ids';
     cb.value = String(a.id);
     cb.id = `fp-asset-${a.id}`;
+    cb.addEventListener('change', _updateCartSummary);
     lbl.appendChild(cb);
 
     lbl.appendChild(document.createTextNode(' ' + (a.model_name || '') + (a.brand ? ' ' + a.brand : '') + ' '));
@@ -615,6 +616,21 @@ async function renderModalAssetChecks(zoneKey, checks) {
 
     checks.appendChild(lbl);
   });
+  _updateCartSummary();
+}
+
+function _updateCartSummary() {
+  const summary = document.getElementById('fp-cart-summary');
+  if (!summary) return;
+  const checks = document.getElementById('fp-asset-checks');
+  const n = checks ? checks.querySelectorAll('input[name="asset_ids"]:checked').length : 0;
+  if (n === 0) {
+    summary.textContent = 'No assets selected yet';
+    summary.classList.remove('has-items');
+  } else {
+    summary.textContent = `${n} asset${n === 1 ? '' : 's'} added to your booking`;
+    summary.classList.add('has-items');
+  }
 }
 
 function closeBookingModal() {
