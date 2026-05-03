@@ -47,3 +47,5 @@ def init_floor_plan(app: Flask, *, existing_db: SQLAlchemy | None = None):
     # and use Flask-Migrate / Alembic instead — see migrations/README.md.
     with app.app_context():
         db.create_all()
+        from .seed import seed_bookable_rooms
+        seed_bookable_rooms()
