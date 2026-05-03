@@ -565,5 +565,40 @@
 </script>
 <script src="{{ url_for('floor_plan.static', filename='floor_plan/js/floor-plan.js') }}"></script>
 
+<div id="fp-booking-modal" class="fp-modal" hidden>
+  <div class="fp-modal-backdrop" data-close></div>
+  <div class="fp-modal-card" role="dialog" aria-labelledby="fp-modal-title">
+    <header class="fp-modal-header">
+      <h2 id="fp-modal-title">Request to book</h2>
+      <button class="fp-modal-close" data-close aria-label="Close">x</button>
+    </header>
+    <form id="fp-booking-form">
+      <input type="hidden" name="zone_key">
+
+      <label>Date <input name="date" type="date" required></label>
+      <div class="fp-row">
+        <label>Start <input name="start_time" type="time" required></label>
+        <label>End <input name="end_time" type="time" required></label>
+      </div>
+      <label>Attendees <input name="attendees" type="number" min="1" value="1" required></label>
+      <label>Purpose
+        <textarea name="purpose" minlength="10" maxlength="500" rows="3" required></textarea>
+      </label>
+
+      <fieldset class="fp-asset-pick">
+        <legend>Assets needed (optional)</legend>
+        <div id="fp-asset-checks">
+          <p class="fp-asset-empty">Select a room first.</p>
+        </div>
+      </fieldset>
+
+      <div class="fp-form-error" id="fp-booking-error" hidden></div>
+      <footer class="fp-modal-footer">
+        <button type="button" class="fp-btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="fp-book-btn">Submit request</button>
+      </footer>
+    </form>
+  </div>
+</div>
 </body>
 </html>

@@ -453,9 +453,113 @@ function clearBookButton() {
 }
 
 function openBookingModal(zoneKey) {
-  // Replaced in Task 11.
-  console.log('open booking modal', zoneKey);
+  const modal = document.getElementById('fp-booking-modal');
+  const form = document.getElementById('fp-booking-form');
+  const checks = document.getElementById('fp-asset-checks');
+  const errorBox = document.getElementById('fp-booking-error');
+
+  form.reset();
+  errorBox.hidden = true;
+  errorBox.textContent = '';
+  form.elements['zone_key'].value = zoneKey;
+
+  // Default date = today, min = today
+  const today = new Date().toISOString().slice(0, 10);
+  form.elements['date'].value = today;
+  form.elements['date'].min = today;
+
+  // Build asset checkboxes from the panel's already-rendered list
+  checks.replaceChildren();
+  const ul = document.querySelector('.fp-asset-list');
+  if (ul && ul.dataset.zone === zoneKey && ul.children.length) {
+    Array.from(ul.querySelectorAll('li')).forEach(li => {
+      const id = Number(li.dataset.assetId);
+      const tagEl = li.querySelector('.asset-tag');
+      const labelText = li.firstElementChild ? li.firstElementChild.textContent.trim() : '';
+      const tagText = tagEl ? tagEl.textContent : '';
+
+      const lbl = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.name = 'asset_ids';
+      cb.value = String(id);
+      cb.id = `fp-asset-${id}`;
+      lbl.appendChild(cb);
+
+      const text = document.createTextNode(' ' + labelText + ' ');
+      lbl.appendChild(text);
+
+      const tag = document.createElement('span');
+      tag.className = 'asset-tag';
+      tag.textContent = tagText;
+      lbl.appendChild(tag);
+
+      checks.appendChild(lbl);
+    });
+  } else {
+    const p = document.createElement('p');
+    p.className = 'fp-asset-empty';
+    p.textContent = 'No assets in this room.';
+    checks.appendChild(p);
+  }
+
+  modal.hidden = false;
 }
+
+function closeBookingModal() {
+  document.getElementById('fp-booking-modal').hidden = true;
+}
+
+// Close on backdrop / [data-close] click
+document.addEventListener('click', e => {
+  if (e.target.closest('#fp-booking-modal [data-close]')) closeBookingModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeBookingModal();
+});
+
+// Submit
+document.getElementById('fp-booking-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const fd = new FormData(form);
+  const errorBox = document.getElementById('fp-booking-error');
+  errorBox.hidden = true;
+  errorBox.textContent = '';
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+
+  const payload = {
+    zone_key: fd.get('zone_key'),
+    date: fd.get('date'),
+    start_time: fd.get('start_time'),
+    end_time: fd.get('end_time'),
+    attendees: Number(fd.get('attendees')),
+    purpose: fd.get('purpose'),
+    asset_ids: fd.getAll('asset_ids').map(Number),
+  };
+
+  try {
+    const r = await fetch(`${API_BASE}/bookings`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const body = await r.json();
+    if (!r.ok) {
+      errorBox.textContent = body.error || 'Booking failed.';
+      errorBox.hidden = false;
+      return;
+    }
+    closeBookingModal();
+    toast(`Booking request submitted - ticket ${body.ticket_number}`);
+  } catch (err) {
+    errorBox.textContent = 'Network error. Please try again.';
+    errorBox.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
 
 function renderAssets(z) {
   const ul = document.getElementById('d-assets');
