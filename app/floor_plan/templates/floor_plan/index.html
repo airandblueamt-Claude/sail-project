@@ -1,31 +1,15 @@
-{# 
-  SAIL Incubation Floor Plan — Jinja2 template
+{% extends "base.html" %}
+{% block title %}Floor plan — SAIL{% endblock %}
+{% block extra_head %}
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('floor_plan.static', filename='floor_plan/css/floor-plan.css') }}" />
+{% endblock %}
+{% block content %}
 
-  This template is self-contained. To integrate with your SAIL portal's base layout,
-  change the top of this file to:
-
-      {% extends "base.html" %}
-      {% block title %}Floor Plan{% endblock %}
-      {% block content %}
-      ... (the .page div below) ...
-      {% endblock %}
-
-  See docs/INTEGRATION.md for details.
-#}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Incubation Floor Plan — Interactive</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="{{ url_for('floor_plan.static', filename='floor_plan/css/floor-plan.css') }}" />
-</head>
-<body>
-
-<div class="page" id="app">
+<div class="fp-app" id="app">
+  <div class="page">
 
   <header>
     <div class="brand">
@@ -595,10 +579,11 @@
   </div>
 </div>
 
+</div><!-- /.fp-app -->
+
 <script>
   // Bridge from Flask -> JS. The blueprint can override SAIL_API_BASE if mounted differently.
   window.SAIL_API_BASE = "{{ api_base or url_for('floor_plan.api_pins_list').removesuffix('/pins') }}";
 </script>
 <script src="{{ url_for('floor_plan.static', filename='floor_plan/js/floor-plan.js') }}"></script>
-</body>
-</html>
+{% endblock %}

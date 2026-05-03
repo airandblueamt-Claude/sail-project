@@ -1,4 +1,7 @@
-  :root {
+  /* Floor-plan styles are scoped under .fp-app so they don't bleed into
+     sail-project's sidebar or other pages. CSS variables live on .fp-app
+     (not :root) for the same reason. */
+  .fp-app {
     --bg: #f5f3ee;
     --paper: #faf8f3;
     --ink: #1a1a1a;
@@ -16,8 +19,18 @@
     --warn: #d68f1f;
     --bad: #c8362d;
     --shadow: 0 1px 0 rgba(26,26,26,0.04), 0 8px 24px rgba(26,26,26,0.06);
+
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter Tight', system-ui, sans-serif;
+    min-height: 100vh;
+    transition: background 0.25s ease, color 0.25s ease;
+    background-image:
+      linear-gradient(var(--line-faint) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-faint) 1px, transparent 1px);
+    background-size: 32px 32px;
   }
-  [data-theme="dark"] {
+  [data-theme="dark"] .fp-app {
     --bg: #14161b;
     --paper: #1c1f26;
     --ink: #e8e6df;
@@ -33,20 +46,7 @@
     --hover-stroke: #78aae6;
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    background: var(--bg);
-    color: var(--ink);
-    font-family: 'Inter Tight', system-ui, sans-serif;
-    min-height: 100vh;
-    transition: background 0.25s ease, color 0.25s ease;
-  }
-  body {
-    background-image:
-      linear-gradient(var(--line-faint) 1px, transparent 1px),
-      linear-gradient(90deg, var(--line-faint) 1px, transparent 1px);
-    background-size: 32px 32px;
-  }
+  .fp-app * { box-sizing: border-box; margin: 0; padding: 0; }
 
   .page { max-width: 1500px; margin: 0 auto; padding: 24px; }
 
