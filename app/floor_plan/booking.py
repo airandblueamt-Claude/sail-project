@@ -90,6 +90,26 @@ def _validate(payload):
             f"purpose must be {PURPOSE_MIN}-{PURPOSE_MAX} characters."
         )
 
+    # New shape: equipment_requests = [{model_id, quantity}, ...]
+    # Old shape kept for backwards compat: asset_ids = [int, ...]
+    equipment_requests = payload.get("equipment_requests") or []
+    if not isinstance(equipment_requests, list):
+        raise BookingError("equipment_requests must be a list.")
+    cleaned_requests = []
+    for i, item in enumerate(equipment_requests):
+        if not isinstance(item, dict):
+            raise BookingError(f"equipment_requests[{i}] must be an object.")
+        try:
+            mid = int(item["model_id"])
+            qty = int(item["quantity"])
+        except (KeyError, TypeError, ValueError):
+            raise BookingError(
+                f"equipment_requests[{i}] must have integer model_id and quantity."
+            )
+        if qty < 1:
+            raise BookingError(f"equipment_requests[{i}].quantity must be >= 1.")
+        cleaned_requests.append({"model_id": mid, "quantity": qty})
+
     asset_ids = payload.get("asset_ids") or []
     if not isinstance(asset_ids, list):
         raise BookingError("asset_ids must be a list.")
@@ -104,10 +124,11 @@ def _validate(payload):
         "attendees": attendees,
         "purpose": purpose,
         "asset_ids": asset_ids,
+        "equipment_requests": cleaned_requests,
     }
 
 
-def _build_description(room_label, location_code, p, asset_rows):
+def _build_description(room_label, location_code, p, asset_rows, equipment_rows=None):
     lines = [
         f"Booking request for {room_label} ({location_code}).",
         "",
@@ -117,12 +138,114 @@ def _build_description(room_label, location_code, p, asset_rows):
         "Purpose:",
         f"  {p['purpose']}",
     ]
+    if equipment_rows:
+        lines.append("")
+        lines.append("Equipment requested:")
+        for er in equipment_rows:
+            line = f"  - {er['quantity']} x {er['name']}"
+            if er.get('brand'):
+                line += f" ({er['brand']})"
+            line += f" [model_id={er['model_id']}]"
+            lines.append(line)
     if asset_rows:
         lines.append("")
         lines.append("Assets requested:")
         for a in asset_rows:
             lines.append(f"  - {a['asset_tag']} - {a['model_name']} ({a['condition']})")
     return "\n".join(lines)
+
+
+def _parse_equipment_requests_from_description(description):
+    """Return [{model_id, quantity, name}, ...] parsed from the description.
+
+    Format written by _build_description:
+        Equipment requested:
+          - 2 x Dell Monitor (Dell) [model_id=5]
+          - 1 x PC [model_id=8]
+    """
+    if not description or "Equipment requested:" not in description:
+        return []
+    block = description.split("Equipment requested:", 1)[1]
+    # Stop the parse at the next double-newline / next heading
+    block = block.split("\n\nAssets ")[0]
+    out = []
+    for line in block.splitlines():
+        m = re.match(r"\s*-\s+(\d+)\s+x\s+(.+?)\s*\[model_id=(\d+)\]\s*$", line)
+        if m:
+            out.append({
+                "quantity": int(m.group(1)),
+                "name": m.group(2).strip(),
+                "model_id": int(m.group(3)),
+            })
+    return out
+
+
+def _check_equipment_capacity(conn, requested_models, date_str, start_time, end_time):
+    """For each {model_id, quantity} in requested_models, ensure there is
+    enough free inventory of that model during the time window — i.e.
+    total_inventory >= already_committed_to_overlapping_bookings + new_demand.
+
+    Raises BookingError with a clear message on first failure.
+    """
+    if not requested_models:
+        return
+
+    # Find every booking ticket for this date that overlaps the window and is
+    # still active (open / in_progress / waiting). Use a generic prefix LIKE
+    # to grab all booking-request tickets, then narrow on date and overlap.
+    title_prefix = f"Booking request:%on {date_str}"
+    rows = conn.execute(
+        """SELECT id, ticket_number, description FROM tickets
+           WHERE title LIKE ?
+             AND type = 'new_request'
+             AND status IN ('open', 'in_progress', 'waiting')""",
+        (title_prefix,),
+    ).fetchall()
+
+    # Tally committed quantity per model_id from overlapping bookings
+    committed = {}  # model_id -> qty
+    for r in rows:
+        ex_start, ex_end = _parse_times_from_description(r["description"])
+        if not (ex_start and ex_end):
+            continue
+        if not _times_overlap(start_time, end_time, ex_start, ex_end):
+            continue
+        for er in _parse_equipment_requests_from_description(r["description"]):
+            committed[er["model_id"]] = committed.get(er["model_id"], 0) + er["quantity"]
+
+    # For each requested model, ensure capacity. Pull total counts in one query.
+    model_ids = list({rm["model_id"] for rm in requested_models})
+    placeholders = ",".join("?" * len(model_ids))
+    total = {
+        r["equipment_model_id"]: r["n"]
+        for r in conn.execute(
+            f"""SELECT a.equipment_model_id, COUNT(*) AS n
+                FROM assets a
+                WHERE a.equipment_model_id IN ({placeholders})
+                  AND a.status NOT IN ('decommissioned', 'missing')
+                GROUP BY a.equipment_model_id""",
+            model_ids,
+        ).fetchall()
+    }
+    names = {
+        r["id"]: r["name"]
+        for r in conn.execute(
+            f"SELECT id, name FROM equipment_models WHERE id IN ({placeholders})",
+            model_ids,
+        ).fetchall()
+    }
+
+    for rm in requested_models:
+        mid, qty = rm["model_id"], rm["quantity"]
+        if mid not in names:
+            raise BookingError(f"Unknown equipment model id {mid}.")
+        avail = total.get(mid, 0) - committed.get(mid, 0)
+        if avail < qty:
+            raise BookingError(
+                f"Not enough '{names[mid]}' available for that time window — "
+                f"{max(avail, 0)} free, you asked for {qty}. Pick a different "
+                f"slot or fewer units."
+            )
 
 
 def _times_overlap(s1, e1, s2, e2):
@@ -184,6 +307,15 @@ def create_booking_ticket(payload):
         # room+date so two people can not double-book the same window.
         _check_no_overlap(conn, room.label, p["date"], p["start_time"], p["end_time"])
 
+        # Equipment-level capacity: for each requested {model_id, qty},
+        # ensure inventory minus already-committed-to-overlapping-bookings
+        # is enough. Same equipment cannot be promised to two overlapping
+        # bookings.
+        _check_equipment_capacity(
+            conn, p["equipment_requests"], p["date"],
+            p["start_time"], p["end_time"],
+        )
+
         # Verify each requested asset exists. We deliberately do NOT
         # require the asset to live in the room — the user describes what
         # they need; ops physically arranges the room when they approve.
@@ -200,9 +332,33 @@ def create_booking_ticket(payload):
         else:
             asset_rows = []
 
+        # Resolve equipment_requests model_ids to {model_id, name, brand, quantity}
+        equipment_rows = []
+        if p["equipment_requests"]:
+            mids = [er["model_id"] for er in p["equipment_requests"]]
+            placeholders_m = ",".join("?" * len(mids))
+            model_lookup = {
+                r["id"]: dict(r)
+                for r in conn.execute(
+                    f"SELECT id, name, brand FROM equipment_models WHERE id IN ({placeholders_m})",
+                    mids,
+                ).fetchall()
+            }
+            for er in p["equipment_requests"]:
+                m = model_lookup.get(er["model_id"])
+                if m:
+                    equipment_rows.append({
+                        "model_id": m["id"],
+                        "name": m["name"],
+                        "brand": m["brand"],
+                        "quantity": er["quantity"],
+                    })
+
         ticket_number = _next_ticket_number(conn)
         title = f"Booking request: {room.label} on {p['date']}"
-        description = _build_description(room.label, loc["code"], p, asset_rows)
+        description = _build_description(
+            room.label, loc["code"], p, asset_rows, equipment_rows
+        )
 
         cursor = conn.execute(
             """INSERT INTO tickets
@@ -332,7 +488,25 @@ def approve_booking(ticket_id):
         # Each transition is audited so the history shows when the asset
         # moved into / out of the user's hands.
         assigned = []
+
+        # Path 1: legacy asset-tag requests
         asset_tags = _parse_assets_from_description(row["description"])
+        # Path 2: new equipment_request shape (model_id + quantity).
+        # Auto-allocate the first N available assets per model that are
+        # not already checked_out by another booking. Ops can change the
+        # picks later via a manual reassign flow if needed.
+        equipment_requests = _parse_equipment_requests_from_description(row["description"])
+        for er in equipment_requests:
+            picks = conn.execute(
+                """SELECT asset_tag FROM assets
+                   WHERE equipment_model_id = ?
+                     AND status = 'available'
+                     AND assigned_to IS NULL
+                   ORDER BY id LIMIT ?""",
+                (er["model_id"], er["quantity"]),
+            ).fetchall()
+            asset_tags.extend(p["asset_tag"] for p in picks)
+
         if asset_tags:
             placeholders = ",".join("?" * len(asset_tags))
             asset_rows = conn.execute(

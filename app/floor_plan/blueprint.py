@@ -209,6 +209,43 @@ def api_room_assets(zone_key):
     return jsonify(_query_assets_at_location(room.sail_location_id))
 
 
+@floor_plan_bp.route("/api/equipment-catalog", methods=["GET"])
+def api_equipment_catalog():
+    """List equipment models with total inventory count.
+
+    Used by the booking modal: the user picks an equipment *type*
+    (Dell Monitor, PC, etc.) plus a quantity; the ops team picks the
+    specific physical assets to assign at approval time.
+
+    Excludes decommissioned and missing assets from the count — those
+    are not available for booking.
+    """
+    from database import get_db
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT em.id, em.name, em.brand,
+                      COALESCE(c.name, 'Other') AS category,
+                      COUNT(a.id) AS total_count
+               FROM equipment_models em
+               LEFT JOIN categories c ON c.id = em.category_id
+               LEFT JOIN assets a ON a.equipment_model_id = em.id
+                                  AND a.status NOT IN ('decommissioned', 'missing')
+               GROUP BY em.id, em.name, em.brand, c.name
+               HAVING total_count > 0
+               ORDER BY em.name, em.brand""",
+        ).fetchall()
+    return jsonify([
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "brand": r["brand"],
+            "category": r["category"],
+            "total_count": r["total_count"],
+        }
+        for r in rows
+    ])
+
+
 @floor_plan_bp.route("/api/inventory/search", methods=["GET"])
 def api_inventory_search():
     """Search across all of sail.db's assets — used by the booking modal

@@ -96,6 +96,48 @@ def test_post_booking_allows_adjacent_times(client):
     assert r2.status_code == 201, r2.data
 
 
+def test_post_booking_with_equipment_request_succeeds(client):
+    """User picks 'one Display' (model_id=1) instead of a specific asset id.
+    The conftest seeds 3 Displays so capacity is fine."""
+    resp = client.post("/floor-plan/api/bookings", json=_payload(
+        equipment_requests=[{"model_id": 1, "quantity": 1}],
+        asset_ids=[],
+    ))
+    assert resp.status_code == 201, resp.data
+
+
+def test_post_booking_rejects_equipment_capacity_overflow(client):
+    """Conftest has 3 Displays total. Three overlapping bookings each
+    asking for 1 Display fit. A fourth overlapping booking asking for 1
+    must be rejected with a clear capacity message."""
+    base = _payload()
+    # 3 successful overlapping bookings using equipment_requests
+    for slot in [("09:00","10:00"), ("09:15","10:15"), ("09:30","10:30")]:
+        # Each on a different room so the room-overlap rule doesn't fire
+        rooms = ["boardroom-1", "boardroom-2", "conference-long"]
+        room = rooms[["09:00","09:15","09:30"].index(slot[0])]
+        r = client.post("/floor-plan/api/bookings", json=_payload(
+            zone_key=room, start_time=slot[0], end_time=slot[1],
+            asset_ids=[], equipment_requests=[{"model_id": 1, "quantity": 1}],
+        ))
+        assert r.status_code == 201, r.data
+    # Fourth booking overlapping all three → capacity exceeded
+    r4 = client.post("/floor-plan/api/bookings", json=_payload(
+        zone_key="global-theater", start_time="09:30", end_time="10:30",
+        asset_ids=[], equipment_requests=[{"model_id": 1, "quantity": 1}],
+    ))
+    assert r4.status_code == 400
+    assert "not enough" in r4.get_json()["error"].lower()
+
+
+def test_post_booking_rejects_past_date(client):
+    from datetime import date, timedelta
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    r = client.post("/floor-plan/api/bookings", json=_payload(date=yesterday))
+    assert r.status_code == 400
+    assert "today or later" in r.get_json()["error"].lower()
+
+
 def test_post_booking_writes_audit_row(client, temp_sail_db):
     resp = client.post("/floor-plan/api/bookings", json=_payload())
     ticket_id = resp.get_json()["ticket_id"]
