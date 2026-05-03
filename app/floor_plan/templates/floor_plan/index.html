@@ -559,12 +559,6 @@
 
 <div class="toast" id="toast">Saved</div>
 
-<script>
-  // Bridge from Flask -> JS. The blueprint can override SAIL_API_BASE if mounted differently.
-  window.SAIL_API_BASE = "{{ api_base or url_for('floor_plan.api_pins_list').removesuffix('/pins') }}";
-</script>
-<script src="{{ url_for('floor_plan.static', filename='floor_plan/js/floor-plan.js') }}"></script>
-
 <div id="fp-booking-modal" class="fp-modal" hidden>
   <div class="fp-modal-backdrop" data-close></div>
   <div class="fp-modal-card" role="dialog" aria-labelledby="fp-modal-title">
@@ -600,5 +594,11 @@
     </form>
   </div>
 </div>
+
+<script>
+  // Bridge from Flask -> JS. The blueprint can override SAIL_API_BASE if mounted differently.
+  window.SAIL_API_BASE = "{{ api_base or url_for('floor_plan.api_pins_list').removesuffix('/pins') }}";
+</script>
+<script src="{{ url_for('floor_plan.static', filename='floor_plan/js/floor-plan.js') }}"></script>
 </body>
 </html>
