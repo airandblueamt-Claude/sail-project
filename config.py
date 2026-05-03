@@ -14,7 +14,7 @@ PAGE_SIZE = 50
 # ── Email (Gmail SMTP) ──────────────────────────────────────────────
 ADMIN_EMAIL = "airandblueamt@gmail.com"
 SMTP_EMAIL = "airandblueamt@gmail.com"
-SMTP_PASSWORD = os.environ.get("SAIL_SMTP_PASSWORD", "hzirfgqyfpcsscfw")
+SMTP_PASSWORD = os.environ.get("SAIL_SMTP_PASSWORD", "YOUR_APP_PASSWORD_HERE")
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
-APP_URL = os.environ.get("SAIL_APP_URL", "http://10.20.6.56")
+APP_URL = os.environ.get("SAIL_APP_URL", "http://localhost:5555")

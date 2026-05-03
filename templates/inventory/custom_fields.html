@@ -54,7 +54,7 @@
                 </form>
                 {% if g.user.role in ('admin', 'manager') %}
                 <form method="post" action="{{ url_for('inventory.delete_custom_field', field_id=f.id) }}" style="display:inline"
-                      onsubmit="return confirm('Delete column &quot;{{ f.name }}&quot;? All values stored under it will be removed.');">
+                      class="js-confirm-delete-field" data-field-name="{{ f.name }}">
                     <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--danger,#c0392b)">Delete</button>
                 </form>
                 {% endif %}
@@ -71,4 +71,14 @@
 </div>
 <script>lucide.createIcons();</script>
 {% endif %}
+<script>
+  document.querySelectorAll('form.js-confirm-delete-field').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      var name = form.dataset.fieldName || '';
+      if (!confirm('Delete column "' + name + '"? All values stored under it will be removed.')) {
+        e.preventDefault();
+      }
+    });
+  });
+</script>
 {% endblock %}

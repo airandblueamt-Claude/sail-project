@@ -23,11 +23,12 @@ if [ ! -f "$DB_FILE" ]; then
     python init_db.py
     python import_assets_v3.py
 else
-    # schema.sql is fully idempotent (CREATE TABLE/INDEX IF NOT EXISTS).
-    # Re-applying it on every boot picks up any newly added tables/indexes
-    # without touching existing data.
-    echo "[entrypoint] DB exists at $DB_FILE — applying schema.sql for any new tables"
+    # CREATE TABLE/INDEX IF NOT EXISTS in schema.sql picks up new tables and
+    # indexes on existing DBs, but does NOT add new columns to a table that
+    # already exists. Run migrate_db.py after to apply any column additions.
+    echo "[entrypoint] DB exists at $DB_FILE — applying schema.sql + migrations"
     python -c "import sqlite3, os; conn = sqlite3.connect(os.environ.get('SAIL_DB_PATH', '$DB_FILE')); conn.executescript(open('schema.sql').read()); conn.commit(); conn.close()"
+    python migrate_db.py
 fi
 
 # Run the production WSGI server.

@@ -285,7 +285,8 @@ def manage_assets():
     where, params = [], []
     if q:
         where.append("""(
-            a.asset_tag LIKE ? OR a.serial_number LIKE ? OR a.model_number LIKE ?
+            a.asset_tag LIKE ? OR a.serial_number LIKE ?
+            OR COALESCE(a.model_number, em.model_number) LIKE ?
             OR a.holder_name LIKE ? OR em.name LIKE ? OR em.brand LIKE ?
         )""")
         like = f'%{q}%'
@@ -304,6 +305,7 @@ def manage_assets():
     with get_db() as conn:
         assets = conn.execute(f"""
             SELECT a.*, em.name as eq_name, em.brand,
+                   COALESCE(a.model_number, em.model_number) AS model_number,
                    c.name as category_name,
                    l.code as location_code,
                    e.name as assigned_to_name
@@ -334,13 +336,17 @@ def manage_assets():
             "SELECT id, name FROM custom_fields WHERE is_active = 1 ORDER BY name"
         ).fetchall()
 
-        cf_rows = conn.execute("""
-            SELECT asset_id, custom_field_id, value
-            FROM asset_custom_values
-        """).fetchall()
         cf_values = {}
-        for r in cf_rows:
-            cf_values.setdefault(r['asset_id'], {})[r['custom_field_id']] = r['value']
+        asset_ids = [a['id'] for a in assets]
+        if asset_ids:
+            placeholders = ','.join('?' * len(asset_ids))
+            cf_rows = conn.execute(
+                f"SELECT asset_id, custom_field_id, value "
+                f"FROM asset_custom_values WHERE asset_id IN ({placeholders})",
+                asset_ids,
+            ).fetchall()
+            for r in cf_rows:
+                cf_values.setdefault(r['asset_id'], {})[r['custom_field_id']] = r['value']
 
     return render_template('inventory/manage_assets.html',
                            assets=assets,
@@ -361,6 +367,7 @@ def asset_detail(asset_id):
     with get_db() as conn:
         asset = conn.execute("""
             SELECT a.*, em.name AS model_name, em.brand,
+                   COALESCE(a.model_number, em.model_number) AS model_number,
                    c.name AS category_name,
                    COALESCE(l.label, l.code) AS location_name
             FROM assets a
@@ -415,6 +422,7 @@ def edit_asset(asset_id):
     with get_db() as conn:
         asset = conn.execute("""
             SELECT a.*, em.name AS model_name, em.brand,
+                   COALESCE(a.model_number, em.model_number) AS model_number,
                    c.name AS category_name
             FROM assets a
             JOIN equipment_models em ON a.equipment_model_id = em.id
