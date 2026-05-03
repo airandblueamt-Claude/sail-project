@@ -31,18 +31,15 @@ def index():
 
 @floor_plan_bp.route("/bookings", methods=["GET"])
 def bookings_page():
-    """Ops view: list of all booking requests with approve / close actions.
+    """Bookings page — visible to every authenticated user.
 
-    Permission: admin or manager. Other roles get redirected back to the
-    floor plan with a flash message — same pattern as the rest of sail's
-    admin pages.
+    Regular employees see only their own bookings (read-only).
+    Admin and manager see every booking and get the Approve / Close buttons.
     """
-    from flask import g, redirect, url_for, flash
+    from flask import g
     user = getattr(g, "user", None)
-    if not user or user.get("role") not in ("admin", "manager"):
-        flash("Access denied.", "error")
-        return redirect(url_for("floor_plan.index"))
-    return render_template("floor_plan/bookings.html")
+    is_admin = bool(user and user.get("role") in ("admin", "manager"))
+    return render_template("floor_plan/bookings.html", is_admin=is_admin)
 
 
 # ---------- API: pins ----------
@@ -382,7 +379,7 @@ def api_list_bookings():
 
     sql = (
         "SELECT t.id, t.ticket_number, t.title, t.description, t.status, "
-        "       t.created_at, t.closed_at, "
+        "       t.created_at, t.closed_at, t.submitted_by, "
         "       e.name AS submitter_name, e.email AS submitter_email "
         "FROM tickets t "
         "LEFT JOIN employees e ON e.id = t.submitted_by "
@@ -392,6 +389,14 @@ def api_list_bookings():
     if statuses:
         sql += " AND t.status IN (" + ",".join("?" * len(statuses)) + ")"
         params.extend(statuses)
+
+    # Regular users see only their own bookings; admin/manager see all.
+    from flask import g
+    user = getattr(g, "user", None)
+    if user and user.get("role") not in ("admin", "manager"):
+        sql += " AND t.submitted_by = ?"
+        params.append(user["id"])
+
     sql += " ORDER BY t.id DESC"
 
     # Build label -> zone_key map from bookable_rooms (floor_plan.db)

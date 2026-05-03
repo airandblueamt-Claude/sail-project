@@ -29,6 +29,7 @@ def my_tickets():
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
             WHERE t.submitted_by = ?
+              AND t.title NOT LIKE 'Booking request:%'
             ORDER BY t.created_at DESC
         """, (g.user['id'],)).fetchall()
     return render_template('tickets/my_tickets.html', tickets=tickets)
@@ -40,7 +41,9 @@ def list_tickets():
     ttype = request.args.get('type', '')
 
     with get_db() as conn:
-        where_parts = []
+        # Booking-request tickets are managed on /floor-plan/bookings — keep
+        # them out of the general tickets queue so ops don't see them twice.
+        where_parts = ["t.title NOT LIKE 'Booking request:%'"]
         params = []
         if status:
             where_parts.append("t.status = ?")
@@ -48,7 +51,7 @@ def list_tickets():
         if ttype:
             where_parts.append("t.type = ?")
             params.append(ttype)
-        where_sql = " WHERE " + " AND ".join(where_parts) if where_parts else ""
+        where_sql = " WHERE " + " AND ".join(where_parts)
 
         tickets = conn.execute(f"""
             SELECT t.*, e.name as submitter_name,

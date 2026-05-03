@@ -32,8 +32,11 @@
             <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if request.endpoint == 'tickets.my_tickets' %}active{% endif %}">
                 <i data-lucide="ticket"></i> My Tickets
             </a></li>
-            <li><a href="{{ url_for('floor_plan.index') }}" class="{% if request.blueprint == 'floor_plan' %}active{% endif %}">
+            <li><a href="{{ url_for('floor_plan.index') }}" class="{% if request.endpoint == 'floor_plan.index' %}active{% endif %}">
                 <i data-lucide="map"></i> Floor plan
+            </a></li>
+            <li><a href="{{ url_for('floor_plan.bookings_page') }}" class="{% if request.endpoint == 'floor_plan.bookings_page' %}active{% endif %}">
+                <i data-lucide="calendar-check"></i> My Bookings
             </a></li>
             <li><a href="{{ url_for('help.guide') }}" class="{% if request.blueprint == 'help' %}active{% endif %}">
                 <i data-lucide="help-circle"></i> How It Works
@@ -49,9 +52,6 @@
             </a></li>
             <li><a href="{{ url_for('inventory.manage_assets') }}" class="{% if request.endpoint == 'inventory.manage_assets' %}active{% endif %}">
                 <i data-lucide="hard-drive"></i> Manage Assets
-            </a></li>
-            <li><a href="{{ url_for('floor_plan.bookings_page') }}" class="{% if request.endpoint == 'floor_plan.bookings_page' %}active{% endif %}">
-                <i data-lucide="calendar-check"></i> Bookings
             </a></li>
 <li><a href="{{ url_for('reports.inventory') }}" class="{% if request.endpoint == 'reports.inventory' %}active{% endif %}">
                 <i data-lucide="bar-chart-3"></i> Inventory Report

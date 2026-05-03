@@ -52,8 +52,14 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <h2>Bookings</h2>
-    <p class="breadcrumb">Room reservation requests · approve and verify asset returns</p>
+    <h2>{% if is_admin %}Bookings{% else %}My Bookings{% endif %}</h2>
+    <p class="breadcrumb">
+      {% if is_admin %}
+      Room reservation requests · approve and verify asset returns
+      {% else %}
+      Track your room reservations and their status
+      {% endif %}
+    </p>
   </div>
 </div>
 
@@ -86,6 +92,7 @@
 <script>
 (() => {
   const API = "{{ url_for('floor_plan.api_list_bookings').rstrip('/') }}";
+  const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
   const content = document.getElementById('bk-content');
   let currentTab = 'active';
 
@@ -200,13 +207,13 @@
 
     const tdAction = document.createElement('td');
     tdAction.className = 'actions';
-    if (b.status === 'open') {
+    if (IS_ADMIN && b.status === 'open') {
       const btn = document.createElement('button');
       btn.className = 'btn btn-sm btn-primary';
       btn.textContent = 'Approve';
       btn.addEventListener('click', () => approve(b));
       tdAction.appendChild(btn);
-    } else if (b.status === 'in_progress') {
+    } else if (IS_ADMIN && b.status === 'in_progress') {
       const btn = document.createElement('button');
       btn.className = 'btn btn-sm';
       btn.textContent = 'Close & verify';
@@ -216,7 +223,15 @@
       const t = document.createElement('span');
       t.style.color = 'var(--text-muted)';
       t.style.fontSize = '12px';
-      t.textContent = b.closed_at ? `Closed ${b.closed_at.slice(0, 10)}` : 'Closed';
+      if (b.status === 'closed') {
+        t.textContent = b.closed_at ? `Closed ${b.closed_at.slice(0, 10)}` : 'Closed';
+      } else if (b.status === 'open') {
+        t.textContent = 'Awaiting ops review';
+      } else if (b.status === 'in_progress') {
+        t.textContent = 'Approved · awaiting close';
+      } else {
+        t.textContent = b.status;
+      }
       tdAction.appendChild(t);
     }
     tr.appendChild(tdAction);
