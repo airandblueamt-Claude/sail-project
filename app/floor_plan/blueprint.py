@@ -209,6 +209,60 @@ def api_room_assets(zone_key):
     return jsonify(_query_assets_at_location(room.sail_location_id))
 
 
+@floor_plan_bp.route("/api/inventory/search", methods=["GET"])
+def api_inventory_search():
+    """Search across all of sail.db's assets — used by the booking modal
+    so users can pick any asset, not just ones already in the room.
+
+    Query params:
+        q     — substring matched against asset_tag, model name, brand
+                (case-insensitive). Empty q returns the first `limit`
+                rows ordered by model name.
+        limit — max rows to return (default 20, capped at 100).
+    """
+    q = (request.args.get("q") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit", 20)), 100))
+    except ValueError:
+        limit = 20
+
+    sql = (
+        "SELECT a.id, a.asset_tag, a.status, a.condition, a.assigned_to, "
+        "       a.location_id, em.name AS model_name, em.brand, "
+        "       l.label AS location_label "
+        "FROM assets a "
+        "JOIN equipment_models em ON em.id = a.equipment_model_id "
+        "LEFT JOIN locations l ON l.id = a.location_id "
+    )
+    params = []
+    if q:
+        like = f"%{q}%"
+        sql += ("WHERE a.asset_tag LIKE ? COLLATE NOCASE "
+                "   OR em.name LIKE ? COLLATE NOCASE "
+                "   OR em.brand LIKE ? COLLATE NOCASE ")
+        params.extend([like, like, like])
+    sql += "ORDER BY em.name, a.asset_tag LIMIT ?"
+    params.append(limit)
+
+    from database import get_db
+    with get_db() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return jsonify([
+        {
+            "id": r["id"],
+            "asset_tag": r["asset_tag"],
+            "status": r["status"],
+            "condition": r["condition"],
+            "assigned_to": r["assigned_to"],
+            "location_id": r["location_id"],
+            "location_label": r["location_label"],
+            "model_name": r["model_name"],
+            "brand": r["brand"],
+        }
+        for r in rows
+    ])
+
+
 @floor_plan_bp.route("/api/zones/<zone_key>/assets", methods=["GET"])
 def api_zone_assets(zone_key):
     """List assets for any zone that has a sail.db location mapping —

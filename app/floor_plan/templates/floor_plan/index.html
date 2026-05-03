@@ -576,10 +576,12 @@
       </label>
 
       <fieldset class="fp-asset-pick">
-        <legend>Assets — pick what you need</legend>
-        <div id="fp-asset-checks">
-          <p class="fp-asset-empty">Select a room first.</p>
-        </div>
+        <legend>Assets — what equipment do you need?</legend>
+        <div id="fp-selected-chips" class="fp-selected-chips" hidden></div>
+        <input type="search" id="fp-asset-search" class="fp-asset-search"
+               placeholder="Search inventory by tag, model, or brand…"
+               autocomplete="off" />
+        <div id="fp-asset-results" class="fp-asset-results"></div>
         <p class="fp-cart-summary" id="fp-cart-summary">No assets selected yet</p>
       </fieldset>
 

@@ -548,8 +548,8 @@ async function openBookingModal(zoneKey) {
   form.elements['date'].onchange = () => loadPendingCount(zoneKey, form.elements['date'].value);
   loadPendingCount(zoneKey, today);
 
-  // Asset list — fresh fetch (we want the current statuses, not the side panel cache)
-  await renderModalAssetChecks(zoneKey, checks);
+  // Asset picker — search-driven, room's assets pre-loaded as suggestions
+  await _initAssetPicker(zoneKey);
 
   modal.hidden = false;
 }
@@ -572,65 +572,155 @@ async function loadPendingCount(zoneKey, date) {
   }
 }
 
-async function renderModalAssetChecks(zoneKey, checks) {
-  checks.replaceChildren();
+// Modal-state: which asset ids are currently in the user's basket, plus a
+// cache of resolved asset metadata so chips can render their labels.
+const _selectedAssets = new Map();   // id -> {asset_tag, model_name, brand, status}
+let _searchSeq = 0;
+
+async function _initAssetPicker(zoneKey) {
+  _selectedAssets.clear();
+  const search = document.getElementById('fp-asset-search');
+  if (search) search.value = '';
+  _renderSelectedChips();
+  _updateCartSummary();
+  // Default load: the room's own assets, so the user sees what is already
+  // in the room before deciding whether to add others.
   let list = [];
   try {
-    const r = await fetch(`${API_BASE}/rooms/${encodeURIComponent(zoneKey)}/assets`);
-    if (r.ok) list = await r.json();
+    const r = await fetch(`${API_BASE}/zones/${encodeURIComponent(zoneKey)}/assets`);
+    if (r.ok) {
+      const body = await r.json();
+      list = body.assets || [];
+    }
   } catch (_) {}
+  _renderResults(list, list.length === 0
+    ? 'No assets currently in this room — start typing to find any equipment in inventory.'
+    : null);
+  if (search && !search._wired) {
+    search._wired = true;
+    let timer = null;
+    search.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => _runAssetSearch(search.value, zoneKey), 250);
+    });
+  }
+}
 
-  if (!list.length) {
-    const p = document.createElement('p');
-    p.className = 'fp-asset-empty';
-    p.textContent = 'No assets in this room.';
-    checks.appendChild(p);
+async function _runAssetSearch(q, zoneKey) {
+  const seq = ++_searchSeq;
+  if (!q.trim()) {
+    // Empty -> reset to room default
+    let list = [];
+    try {
+      const r = await fetch(`${API_BASE}/zones/${encodeURIComponent(zoneKey)}/assets`);
+      if (r.ok) {
+        const body = await r.json();
+        list = body.assets || [];
+      }
+    } catch (_) {}
+    if (seq !== _searchSeq) return;
+    _renderResults(list, list.length === 0
+      ? 'No assets currently in this room — start typing to search.'
+      : null);
     return;
   }
+  let list = [];
+  try {
+    const r = await fetch(`${API_BASE}/inventory/search?q=${encodeURIComponent(q)}&limit=50`);
+    if (r.ok) list = await r.json();
+  } catch (_) {}
+  if (seq !== _searchSeq) return;
+  _renderResults(list, list.length === 0 ? 'No matches.' : null);
+}
 
-  // Sort: available first, then by model name
-  list.sort((a, b) => {
-    const aAvail = a.status === 'available' ? 0 : 1;
-    const bAvail = b.status === 'available' ? 0 : 1;
-    if (aAvail !== bAvail) return aAvail - bAvail;
-    return (a.model_name || '').localeCompare(b.model_name || '');
-  });
-
+function _renderResults(list, emptyText) {
+  const results = document.getElementById('fp-asset-results');
+  if (!results) return;
+  results.replaceChildren();
+  if (!list.length) {
+    const e = document.createElement('div');
+    e.className = 'fp-empty';
+    e.textContent = emptyText || 'No matches.';
+    results.appendChild(e);
+    return;
+  }
   list.forEach(a => {
-    const lbl = document.createElement('label');
+    const row = document.createElement('div');
+    row.className = 'fp-result';
+    if (_selectedAssets.has(a.id)) row.classList.add('selected');
+    row.dataset.id = String(a.id);
 
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.name = 'asset_ids';
-    cb.value = String(a.id);
-    cb.id = `fp-asset-${a.id}`;
-    cb.addEventListener('change', _updateCartSummary);
-    lbl.appendChild(cb);
-
-    lbl.appendChild(document.createTextNode(' ' + (a.model_name || '') + (a.brand ? ' ' + a.brand : '') + ' '));
+    const grow = document.createElement('div');
+    grow.className = 'grow';
+    const name = document.createElement('div');
+    name.textContent = (a.model_name || '') + (a.brand ? ' · ' + a.brand : '');
+    grow.appendChild(name);
+    const meta = document.createElement('div');
+    meta.className = 'where';
+    meta.textContent = (a.location_label || 'No location') + ' · ' + (a.status || '');
+    grow.appendChild(meta);
+    row.appendChild(grow);
 
     const tag = document.createElement('span');
-    tag.className = 'asset-tag';
+    tag.className = 'tag';
     tag.textContent = a.asset_tag || '';
-    lbl.appendChild(tag);
+    row.appendChild(tag);
 
-    // Always show status so users can see the state, but never disable —
-    // ops team handles availability when they triage the request.
-    const status = document.createElement('span');
-    status.className = 'asset-status ' + (a.status || '');
-    status.textContent = (a.status || '').replace('_', ' ');
-    lbl.appendChild(status);
+    row.addEventListener('click', () => {
+      if (_selectedAssets.has(a.id)) {
+        _selectedAssets.delete(a.id);
+        row.classList.remove('selected');
+      } else {
+        _selectedAssets.set(a.id, {
+          asset_tag: a.asset_tag, model_name: a.model_name,
+          brand: a.brand, status: a.status,
+        });
+        row.classList.add('selected');
+      }
+      _renderSelectedChips();
+      _updateCartSummary();
+    });
 
-    checks.appendChild(lbl);
+    results.appendChild(row);
   });
-  _updateCartSummary();
+}
+
+function _renderSelectedChips() {
+  const wrap = document.getElementById('fp-selected-chips');
+  if (!wrap) return;
+  wrap.replaceChildren();
+  if (_selectedAssets.size === 0) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  _selectedAssets.forEach((meta, id) => {
+    const chip = document.createElement('span');
+    chip.className = 'fp-selected-chip';
+    chip.dataset.id = String(id);
+    const label = (meta.model_name || 'Asset') + ' (' + (meta.asset_tag || '') + ')';
+    chip.appendChild(document.createTextNode(label));
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Remove ' + label);
+    x.textContent = '×';
+    x.addEventListener('click', () => {
+      _selectedAssets.delete(id);
+      _renderSelectedChips();
+      _updateCartSummary();
+      // Refresh result-row state if the row is still rendered
+      const row = document.querySelector(`#fp-asset-results .fp-result[data-id="${id}"]`);
+      if (row) row.classList.remove('selected');
+    });
+    chip.appendChild(x);
+    wrap.appendChild(chip);
+  });
 }
 
 function _updateCartSummary() {
   const summary = document.getElementById('fp-cart-summary');
   if (!summary) return;
-  const checks = document.getElementById('fp-asset-checks');
-  const n = checks ? checks.querySelectorAll('input[name="asset_ids"]:checked').length : 0;
+  const n = _selectedAssets.size;
   if (n === 0) {
     summary.textContent = 'No assets selected yet';
     summary.classList.remove('has-items');
@@ -670,7 +760,7 @@ document.getElementById('fp-booking-form').addEventListener('submit', async (e) 
     end_time: fd.get('end_time'),
     attendees: Number(fd.get('attendees')),
     purpose: fd.get('purpose'),
-    asset_ids: fd.getAll('asset_ids').map(Number),
+    asset_ids: Array.from(_selectedAssets.keys()),
   };
 
   try {
