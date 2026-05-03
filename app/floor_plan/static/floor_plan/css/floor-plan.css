@@ -113,30 +113,7 @@
   .search:focus { outline: none; border-color: var(--accent); }
   .search::placeholder { color: var(--ink-3); }
 
-  .view-toggle {
-    display: flex;
-    border: 1px solid var(--line);
-    background: var(--paper);
-  }
-  .view-toggle button {
-    background: transparent;
-    border: none;
-    color: var(--ink);
-    padding: 7px 12px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    cursor: pointer;
-    border-right: 1px solid var(--line);
-    transition: all 0.15s ease;
-  }
-  .view-toggle button:last-child { border-right: none; }
-  .view-toggle button:hover { background: var(--line-faint); }
-  .view-toggle button.on {
-    background: var(--ink);
-    color: var(--paper);
-  }
+  /* (.view-toggle removed — Standard/Heat-mode toggle no longer used.) */
 
   /* FLOOR CARD */
   .floor-card {
@@ -568,14 +545,7 @@
     100% { stroke-width: 2; }
   }
 
-  /* HEAT MODE — color zones by occupancy */
-  .heat .zone .hit {
-    fill: var(--zone-heat, transparent);
-    stroke: var(--line-soft);
-    stroke-width: 0.6;
-  }
-  .heat .zone:hover .hit { stroke: var(--ink); stroke-width: 1.5; }
-  .heat .zone.active .hit { stroke: var(--accent); stroke-width: 2; }
+  /* (.heat zone-color mode removed — Standard/Heat toggle gone.) */
 
   /* ZONE LABELS */
   .zone .label {
@@ -1151,4 +1121,25 @@
   color: var(--bad);
   padding: 8px 12px; border-radius: 6px;
   font-size: 13px; margin-bottom: 12px;
+}
+
+/* Cleanup: hide decorative furniture inside zones (caused label overlap) */
+.fp-app .furn-fill,
+.fp-app .desk { display: none; }
+
+/* Make zone labels and sub-labels easier to read against the schematic */
+.fp-app .zone .label {
+  pointer-events: none;
+  paint-order: stroke fill;
+  stroke: var(--bg-card);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.fp-app .zone .sub-label {
+  pointer-events: none;
+  paint-order: stroke fill;
+  stroke: var(--bg-card);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  fill: var(--text-muted);
 }

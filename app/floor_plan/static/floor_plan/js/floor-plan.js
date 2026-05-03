@@ -655,37 +655,7 @@ document.addEventListener('click', e => {
   }
 });
 
-// View toggle (heat mode)
-document.querySelectorAll('.view-toggle button').forEach(b => {
-  b.addEventListener('click', () => {
-    document.querySelectorAll('.view-toggle button').forEach(x => x.classList.remove('on'));
-    b.classList.add('on');
-    const v = b.dataset.view;
-    const plan = document.getElementById('plan');
-    if (v === 'heat') {
-      plan.classList.add('heat');
-      zoneEls.forEach(el => {
-        const z = ZONES[el.dataset.z];
-        if (z && typeof z.occupancy === 'number') {
-          el.style.setProperty('--zone-heat', occRGBA(z.occupancy, 0.32));
-        }
-      });
-      document.getElementById('legend').innerHTML = `
-        <div class="legend-item"><span class="legend-swatch sw-low"></span>&lt; 40%</div>
-        <div class="legend-item"><span class="legend-swatch sw-mid"></span>40 – 75%</div>
-        <div class="legend-item"><span class="legend-swatch sw-high"></span>&gt; 75%</div>
-      `;
-    } else {
-      plan.classList.remove('heat');
-      zoneEls.forEach(el => el.style.removeProperty('--zone-heat'));
-      document.getElementById('legend').innerHTML = `
-        <div class="legend-item"><span class="legend-swatch sw-default"></span>Available</div>
-        <div class="legend-item"><span class="legend-swatch sw-hover"></span>Hover</div>
-        <div class="legend-item"><span class="legend-swatch sw-active"></span>Selected</div>
-      `;
-    }
-  });
-});
+// (Occupancy heat toggle removed — feature simplified out.)
 
 // Theme toggle
 const themeBtn = document.getElementById('theme-toggle');
