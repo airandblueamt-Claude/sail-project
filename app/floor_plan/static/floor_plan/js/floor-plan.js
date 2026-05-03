@@ -452,58 +452,128 @@ function clearBookButton() {
   if (slot) slot.replaceChildren();
 }
 
-function openBookingModal(zoneKey) {
+async function openBookingModal(zoneKey) {
   const modal = document.getElementById('fp-booking-modal');
   const form = document.getElementById('fp-booking-form');
   const checks = document.getElementById('fp-asset-checks');
   const errorBox = document.getElementById('fp-booking-error');
+  const subtitleEl = document.getElementById('fp-modal-subtitle');
+  const attWarn = document.getElementById('fp-attendees-warning');
 
   form.reset();
   errorBox.hidden = true;
   errorBox.textContent = '';
   form.elements['zone_key'].value = zoneKey;
 
+  // Title + capacity subtitle from BOOKABLE map
+  const room = BOOKABLE.get(zoneKey);
+  if (room) {
+    document.getElementById('fp-modal-title').textContent = `Book ${room.label}`;
+    subtitleEl.textContent = room.capacity ? `Capacity: ${room.capacity} people` : '';
+  }
+
   // Default date = today, min = today
   const today = new Date().toISOString().slice(0, 10);
   form.elements['date'].value = today;
   form.elements['date'].min = today;
 
-  // Build asset checkboxes from the panel's already-rendered list
+  // Default times: 09:00 → 10:00, with lab-hours bounds + 15-min step (set in HTML)
+  form.elements['start_time'].value = '09:00';
+  form.elements['end_time'].value = '10:00';
+
+  // Attendee-vs-capacity live warning
+  attWarn.hidden = true;
+  form.elements['attendees'].oninput = () => {
+    const n = Number(form.elements['attendees'].value);
+    if (room && room.capacity && n > room.capacity) {
+      attWarn.textContent = `Note: ${n} exceeds the room capacity of ${room.capacity}.`;
+      attWarn.hidden = false;
+    } else {
+      attWarn.hidden = true;
+    }
+  };
+
+  // Date-change refetch of pending count
+  form.elements['date'].onchange = () => loadPendingCount(zoneKey, form.elements['date'].value);
+  loadPendingCount(zoneKey, today);
+
+  // Asset list — fresh fetch (we want the current statuses, not the side panel cache)
+  await renderModalAssetChecks(zoneKey, checks);
+
+  modal.hidden = false;
+}
+
+async function loadPendingCount(zoneKey, date) {
+  const banner = document.getElementById('fp-pending-banner');
+  if (!banner) return;
+  try {
+    const r = await fetch(`${API_BASE}/rooms/${encodeURIComponent(zoneKey)}/bookings?date=${encodeURIComponent(date)}`);
+    if (!r.ok) { banner.hidden = true; return; }
+    const data = await r.json();
+    if (data.open_count > 0) {
+      banner.textContent = `Heads-up: ${data.open_count} other booking request${data.open_count === 1 ? '' : 's'} for this room on ${date}. Ops team will sort overlaps.`;
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
+    }
+  } catch (_) {
+    banner.hidden = true;
+  }
+}
+
+async function renderModalAssetChecks(zoneKey, checks) {
   checks.replaceChildren();
-  const ul = document.querySelector('.fp-asset-list');
-  if (ul && ul.dataset.zone === zoneKey && ul.children.length) {
-    Array.from(ul.querySelectorAll('li')).forEach(li => {
-      const id = Number(li.dataset.assetId);
-      const tagEl = li.querySelector('.asset-tag');
-      const labelText = li.firstElementChild ? li.firstElementChild.textContent.trim() : '';
-      const tagText = tagEl ? tagEl.textContent : '';
+  let list = [];
+  try {
+    const r = await fetch(`${API_BASE}/rooms/${encodeURIComponent(zoneKey)}/assets`);
+    if (r.ok) list = await r.json();
+  } catch (_) {}
 
-      const lbl = document.createElement('label');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.name = 'asset_ids';
-      cb.value = String(id);
-      cb.id = `fp-asset-${id}`;
-      lbl.appendChild(cb);
-
-      const text = document.createTextNode(' ' + labelText + ' ');
-      lbl.appendChild(text);
-
-      const tag = document.createElement('span');
-      tag.className = 'asset-tag';
-      tag.textContent = tagText;
-      lbl.appendChild(tag);
-
-      checks.appendChild(lbl);
-    });
-  } else {
+  if (!list.length) {
     const p = document.createElement('p');
     p.className = 'fp-asset-empty';
     p.textContent = 'No assets in this room.';
     checks.appendChild(p);
+    return;
   }
 
-  modal.hidden = false;
+  // Sort: available first, then by model name
+  list.sort((a, b) => {
+    const aAvail = a.status === 'available' ? 0 : 1;
+    const bAvail = b.status === 'available' ? 0 : 1;
+    if (aAvail !== bAvail) return aAvail - bAvail;
+    return (a.model_name || '').localeCompare(b.model_name || '');
+  });
+
+  list.forEach(a => {
+    const isAvail = a.status === 'available';
+    const lbl = document.createElement('label');
+    if (!isAvail) lbl.classList.add('disabled');
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.name = 'asset_ids';
+    cb.value = String(a.id);
+    cb.id = `fp-asset-${a.id}`;
+    cb.disabled = !isAvail;
+    lbl.appendChild(cb);
+
+    lbl.appendChild(document.createTextNode(' ' + (a.model_name || '') + (a.brand ? ' ' + a.brand : '') + ' '));
+
+    const tag = document.createElement('span');
+    tag.className = 'asset-tag';
+    tag.textContent = a.asset_tag || '';
+    lbl.appendChild(tag);
+
+    if (!isAvail) {
+      const status = document.createElement('span');
+      status.className = 'asset-status ' + (a.status || '');
+      status.textContent = (a.status || '').replace('_', ' ');
+      lbl.appendChild(status);
+    }
+
+    checks.appendChild(lbl);
+  });
 }
 
 function closeBookingModal() {

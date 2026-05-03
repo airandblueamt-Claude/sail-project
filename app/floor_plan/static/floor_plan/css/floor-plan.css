@@ -1123,6 +1123,49 @@
   font-size: 13px; margin-bottom: 12px;
 }
 
+/* Booking modal — capacity / pending / hours hint / attendees warning */
+.fp-modal-subtitle {
+  margin: 4px 0 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.fp-pending-banner {
+  background: var(--yellow-bg);
+  color: var(--text);
+  border: 1px solid var(--yellow);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.fp-hours-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 0 0 14px 0;
+}
+.fp-attendees-warning {
+  color: var(--yellow);
+  font-size: 12px;
+  margin: -8px 0 8px 0;
+}
+.fp-asset-pick label.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.fp-asset-pick .asset-status {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  background: var(--accent-light);
+  color: var(--text-muted);
+}
+.fp-asset-pick .asset-status.in_use { background: var(--yellow-bg); color: var(--yellow); }
+.fp-asset-pick .asset-status.maintenance { background: var(--red-bg); color: var(--red); }
+.fp-asset-pick .asset-status.checked_out { background: var(--accent-light); color: var(--accent); }
+
 /* Cleanup: hide decorative furniture inside zones (caused label overlap) */
 .fp-app .furn-fill,
 .fp-app .desk { display: none; }

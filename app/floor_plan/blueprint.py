@@ -189,6 +189,42 @@ def api_room_assets(zone_key):
     ])
 
 
+@floor_plan_bp.route("/api/rooms/<zone_key>/bookings", methods=["GET"])
+def api_room_bookings(zone_key):
+    """Count pending booking requests for a room on a given date.
+
+    Used by the booking modal to show "X pending requests for this date" so
+    users see if a room is already in demand. Looks up tickets by the title
+    pattern that booking.create_booking_ticket() writes; safe because we own
+    the format.
+    """
+    date = request.args.get("date", "")
+    if not date:
+        abort(400, description="date query param is required (YYYY-MM-DD).")
+
+    room = BookableRoom.query.filter_by(zone_key=zone_key, is_active=1).first()
+    if room is None:
+        abort(404, description=f"No bookable room for zone '{zone_key}'.")
+
+    title = f"Booking request: {room.label} on {date}"
+    from database import get_db
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT ticket_number, status FROM tickets
+               WHERE title = ?
+                 AND type = 'new_request'
+                 AND status IN ('open', 'in_progress', 'waiting')
+               ORDER BY id DESC""",
+            (title,),
+        ).fetchall()
+
+    return jsonify({
+        "date": date,
+        "open_count": len(rows),
+        "tickets": [{"ticket_number": r["ticket_number"], "status": r["status"]} for r in rows],
+    })
+
+
 @floor_plan_bp.route("/api/bookings", methods=["POST"])
 def api_create_booking():
     """Submit a booking request. Creates a ticket in sail.db."""

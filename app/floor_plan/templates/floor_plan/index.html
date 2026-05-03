@@ -545,24 +545,33 @@
   <div class="fp-modal-backdrop" data-close></div>
   <div class="fp-modal-card" role="dialog" aria-labelledby="fp-modal-title">
     <header class="fp-modal-header">
-      <h2 id="fp-modal-title">Request to book</h2>
+      <div>
+        <h2 id="fp-modal-title">Request to book</h2>
+        <p id="fp-modal-subtitle" class="fp-modal-subtitle"></p>
+      </div>
       <button class="fp-modal-close" data-close aria-label="Close">x</button>
     </header>
+
+    <div id="fp-pending-banner" class="fp-pending-banner" hidden></div>
+
+    <p class="fp-hours-hint">Lab hours: 7:00 AM – 4:00 PM · 15-minute slots</p>
+
     <form id="fp-booking-form">
       <input type="hidden" name="zone_key">
 
       <label>Date <input name="date" type="date" required></label>
       <div class="fp-row">
-        <label>Start <input name="start_time" type="time" required></label>
-        <label>End <input name="end_time" type="time" required></label>
+        <label>Start <input name="start_time" type="time" min="07:00" max="16:00" step="900" required></label>
+        <label>End <input name="end_time" type="time" min="07:00" max="16:00" step="900" required></label>
       </div>
       <label>Attendees <input name="attendees" type="number" min="1" value="1" required></label>
+      <p id="fp-attendees-warning" class="fp-attendees-warning" hidden></p>
       <label>Purpose
         <textarea name="purpose" minlength="10" maxlength="500" rows="3" required></textarea>
       </label>
 
       <fieldset class="fp-asset-pick">
-        <legend>Assets needed (optional)</legend>
+        <legend>Assets — pick what you need</legend>
         <div id="fp-asset-checks">
           <p class="fp-asset-empty">Select a room first.</p>
         </div>

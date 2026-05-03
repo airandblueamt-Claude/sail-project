@@ -15,6 +15,11 @@ from .models import BookableRoom
 PURPOSE_MIN = 10
 PURPOSE_MAX = 500
 
+# Lab operating hours (24h). Bookings outside this window are rejected.
+LAB_OPEN = _time(7, 0)
+LAB_CLOSE = _time(16, 0)
+SLOT_MINUTES = 15  # bookings align to 15-min slots (informational; client enforces step)
+
 
 class BookingError(ValueError):
     """Raised on validation failure. Message is safe to surface to users."""
@@ -53,6 +58,11 @@ def _validate(payload):
         raise BookingError("start_time / end_time must be HH:MM.")
     if end <= start:
         raise BookingError("end_time must be after start_time.")
+    if start < LAB_OPEN or end > LAB_CLOSE:
+        raise BookingError(
+            f"Bookings must fall within lab hours "
+            f"({LAB_OPEN.strftime('%H:%M')}–{LAB_CLOSE.strftime('%H:%M')})."
+        )
 
     try:
         attendees = int(payload["attendees"])
