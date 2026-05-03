@@ -127,6 +127,8 @@ def create_booking_ticket(payload):
     if not user_id:
         raise BookingError("Login required.")
 
+    asset_dicts = []
+    submitter = None
     with get_db() as conn:
         loc = conn.execute(
             "SELECT id, code, label FROM locations WHERE id = ?",
@@ -161,4 +163,59 @@ def create_booking_ticket(payload):
         ticket_id = cursor.lastrowid
         log_audit(conn, "tickets", ticket_id, "create", changed_by=user_id)
 
+        # Materialise asset details + submitter contact for the email helpers
+        # while we still have the connection open.
+        asset_dicts = [dict(r) for r in asset_rows]
+        sub_row = conn.execute(
+            "SELECT id, name, email FROM employees WHERE id = ?", (user_id,)
+        ).fetchone()
+        submitter = dict(sub_row) if sub_row else None
+
+    # Emails go out *after* commit so a mail-server hiccup never rolls back the
+    # ticket. send_email() is non-blocking (background thread).
+    _send_booking_emails(
+        ticket_id=ticket_id,
+        ticket_number=ticket_number,
+        title=title,
+        description=description,
+        room_label=room.label,
+        payload=p,
+        asset_dicts=asset_dicts,
+        submitter=submitter,
+    )
+
     return {"ticket_id": ticket_id, "ticket_number": ticket_number}
+
+
+def _send_booking_emails(*, ticket_id, ticket_number, title, description,
+                         room_label, payload, asset_dicts, submitter):
+    """Fire the two emails that go out on a successful booking submit:
+    - Ops team gets the existing notify_ticket_created (admin queue alert).
+    - Requester gets notify_booking_submitted with the booking details.
+    Both are best-effort; failures are logged inside email_service.send_email.
+    """
+    try:
+        from email_service import notify_ticket_created, notify_booking_submitted
+    except Exception:  # pragma: no cover — only fires if email_service breaks
+        return
+
+    ticket_dict = {
+        "id": ticket_id,
+        "ticket_number": ticket_number,
+        "type": "new_request",
+        "priority": "medium",
+        "title": title,
+        "description": description,
+    }
+    if submitter:
+        notify_ticket_created(ticket_dict, submitter)
+        notify_booking_submitted(
+            ticket_dict, submitter,
+            room_label=room_label,
+            date=payload["date"],
+            start_time=payload["start_time"],
+            end_time=payload["end_time"],
+            attendees=payload["attendees"],
+            purpose=payload["purpose"],
+            asset_rows=asset_dicts,
+        )

@@ -157,6 +157,144 @@ def notify_ticket_assigned(ticket, assignee_email, assigner_name=None):
     send_email(assignee_email, subject, _base_html(body_html))
 
 
+def notify_booking_submitted(ticket, submitter, room_label, date, start_time,
+                             end_time, attendees, purpose, asset_rows):
+    """Confirmation email to the requester when a floor-plan booking lands.
+
+    `submitter` must contain `email` and `name`. `asset_rows` is the list
+    of asset dicts the requester picked (asset_tag + model_name).
+    """
+    email = submitter.get("email")
+    if not email:
+        return
+
+    asset_block = ""
+    if asset_rows:
+        items = "".join(
+            f"<li>{r['asset_tag']} — {r.get('model_name','')}</li>"
+            for r in asset_rows
+        )
+        asset_block = f"<p><strong>Assets requested:</strong></p><ul>{items}</ul>"
+
+    subject = (
+        f"Booking request received — {ticket['ticket_number']} "
+        f"({room_label} on {date})"
+    )
+    send_email(email, subject, _base_html(f"""
+        <h2 style="margin-top:0;">Booking request received</h2>
+        <p>Hi {submitter.get('name', 'there')},</p>
+        <p>We have received your room-booking request and opened ticket
+           <strong>#{ticket['ticket_number']}</strong>. The operations team
+           will review and confirm shortly.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;
+                      margin-top:12px;">
+            <tr><td style="padding:6px 0;color:#8a8fa8;width:120px;">Room</td>
+                <td style="padding:6px 0;"><strong>{room_label}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Date</td>
+                <td style="padding:6px 0;">{date}</td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Time</td>
+                <td style="padding:6px 0;">{start_time} – {end_time}</td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Attendees</td>
+                <td style="padding:6px 0;">{attendees}</td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;vertical-align:top;">Purpose</td>
+                <td style="padding:6px 0;">{purpose}</td></tr>
+        </table>
+        {asset_block}
+        <p style="margin-top:16px;">
+            <a href="{APP_URL}/tickets/" style="display:inline-block;background:#4f6ef7;
+               color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;">
+               View my tickets</a>
+        </p>
+        <p style="color:#8a8fa8;font-size:12px;margin-top:16px;">
+            You will get another email once the booking is approved or closed.
+        </p>
+    """))
+
+
+def notify_booking_approved(ticket, submitter, room_label, date,
+                             start_time, end_time):
+    """Tell the requester their booking has been approved by ops."""
+    email = submitter.get("email")
+    if not email:
+        return
+    subject = (
+        f"Booking approved — {ticket['ticket_number']} "
+        f"({room_label} on {date})"
+    )
+    send_email(email, subject, _base_html(f"""
+        <h2 style="margin-top:0;">Your booking is approved</h2>
+        <p>Hi {submitter.get('name', 'there')},</p>
+        <p>Ticket <strong>#{ticket['ticket_number']}</strong> for
+           <strong>{room_label}</strong> on {date}
+           ({start_time} – {end_time}) has been approved by the operations
+           team. The room is reserved for you for that window.</p>
+        <p>When you are done, please leave the room as you found it. The
+           operations team will close the booking and verify any equipment
+           you used.</p>
+        <p style="margin-top:16px;">
+            <a href="{APP_URL}/tickets/" style="display:inline-block;background:#22c55e;
+               color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;">
+               View ticket</a>
+        </p>
+    """))
+
+
+def notify_booking_closed(ticket, submitter, room_label, date, returns):
+    """Tell the requester their booking has been closed and assets verified.
+
+    `returns` is a list of dicts: {asset_tag, model_name, state, notes}.
+    state ∈ {'returned_good', 'damaged', 'missing'}.
+    Also CCs ADMIN_EMAIL when any return is damaged or missing.
+    """
+    email = submitter.get("email")
+    if not email:
+        return
+
+    rows = "".join(
+        f"<tr><td style='padding:4px 8px;'>{r['asset_tag']}</td>"
+        f"<td style='padding:4px 8px;'>{r.get('model_name','')}</td>"
+        f"<td style='padding:4px 8px;'>"
+        f"<span style='color:{'#22c55e' if r['state']=='returned_good' else '#ef4444'};'>"
+        f"{r['state'].replace('_',' ')}</span></td></tr>"
+        for r in (returns or [])
+    )
+    return_table = (
+        f"<table style='width:100%;border-collapse:collapse;font-size:14px;"
+        f"border:1px solid #e2e4ec;margin-top:12px;'>"
+        f"<thead><tr style='background:#f5f6fa;'>"
+        f"<th style='padding:6px 8px;text-align:left;'>Asset</th>"
+        f"<th style='padding:6px 8px;text-align:left;'>Model</th>"
+        f"<th style='padding:6px 8px;text-align:left;'>Return state</th>"
+        f"</tr></thead><tbody>{rows}</tbody></table>"
+        if rows else "<p>No assets were checked out for this booking.</p>"
+    )
+
+    has_issue = any(r.get('state') in ('damaged', 'missing') for r in (returns or []))
+    issue_note = (
+        "<p style='color:#ef4444;margin-top:12px;'><strong>Note:</strong> "
+        "one or more assets were flagged as damaged or missing — admin "
+        "has been copied for follow-up.</p>"
+        if has_issue else ""
+    )
+
+    subject = f"Booking closed — {ticket['ticket_number']} ({room_label} on {date})"
+    body = _base_html(f"""
+        <h2 style="margin-top:0;">Booking closed</h2>
+        <p>Hi {submitter.get('name', 'there')},</p>
+        <p>Ticket <strong>#{ticket['ticket_number']}</strong> for
+           <strong>{room_label}</strong> on {date} has been closed by the
+           operations team. The asset return verification is below.</p>
+        {return_table}
+        {issue_note}
+        <p style="color:#8a8fa8;font-size:12px;margin-top:16px;">
+            If anything looks wrong, reply to this email.
+        </p>
+    """)
+    send_email(email, subject, body)
+    if has_issue:
+        send_email(ADMIN_EMAIL, "[Follow-up] " + subject, body)
+
+
 def notify_ticket_update(ticket, user_email, update_type, updater_name=None):
     """Notify ticket submitter of status change or comment."""
     if not user_email:
