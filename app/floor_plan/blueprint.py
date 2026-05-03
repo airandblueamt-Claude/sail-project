@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .db import db
 from .models import Pin, BookableRoom
+from .booking import create_booking_ticket, BookingError
 
 
 floor_plan_bp = Blueprint(
@@ -186,6 +187,20 @@ def api_room_assets(zone_key):
         }
         for r in rows
     ])
+
+
+@floor_plan_bp.route("/api/bookings", methods=["POST"])
+def api_create_booking():
+    """Submit a booking request. Creates a ticket in sail.db."""
+    payload = request.get_json(silent=True)
+    try:
+        result = create_booking_ticket(payload)
+    except BookingError as e:
+        msg = str(e)
+        if "No bookable room" in msg:
+            return jsonify({"error": msg}), 404
+        return jsonify({"error": msg}), 400
+    return jsonify(result), 201
 
 
 # ---------- Healthcheck ----------
