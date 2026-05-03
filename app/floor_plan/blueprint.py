@@ -225,6 +225,66 @@ def api_room_bookings(zone_key):
     })
 
 
+@floor_plan_bp.route("/api/bookings", methods=["GET"])
+def api_list_bookings():
+    """List booking tickets with parsed room/date/asset metadata.
+
+    Optional ?status=open|in_progress|closed|all (default open + in_progress).
+    Powers the ops bookings page.
+    """
+    from .booking import (_parse_booking_title, _parse_times_from_description,
+                          _parse_assets_from_description)
+    from database import get_db
+
+    status_q = (request.args.get("status") or "active").lower()
+    if status_q == "all":
+        statuses = None
+    elif status_q == "active":
+        statuses = ("open", "in_progress")
+    else:
+        statuses = (status_q,)
+
+    sql = (
+        "SELECT t.id, t.ticket_number, t.title, t.description, t.status, "
+        "       t.created_at, t.closed_at, "
+        "       e.name AS submitter_name, e.email AS submitter_email "
+        "FROM tickets t "
+        "LEFT JOIN employees e ON e.id = t.submitted_by "
+        "WHERE t.title LIKE 'Booking request:%'"
+    )
+    params = []
+    if statuses:
+        sql += " AND t.status IN (" + ",".join("?" * len(statuses)) + ")"
+        params.extend(statuses)
+    sql += " ORDER BY t.id DESC"
+
+    with get_db() as conn:
+        rows = conn.execute(sql, params).fetchall()
+
+    out = []
+    for r in rows:
+        room_label, date_str = _parse_booking_title(r["title"])
+        start_time, end_time = _parse_times_from_description(r["description"])
+        asset_tags = _parse_assets_from_description(r["description"])
+        out.append({
+            "id": r["id"],
+            "ticket_number": r["ticket_number"],
+            "status": r["status"],
+            "room_label": room_label,
+            "date": date_str,
+            "start_time": start_time,
+            "end_time": end_time,
+            "asset_tags": asset_tags,
+            "submitter": {
+                "name": r["submitter_name"],
+                "email": r["submitter_email"],
+            },
+            "created_at": r["created_at"],
+            "closed_at": r["closed_at"],
+        })
+    return jsonify(out)
+
+
 @floor_plan_bp.route("/api/bookings", methods=["POST"])
 def api_create_booking():
     """Submit a booking request. Creates a ticket in sail.db."""
