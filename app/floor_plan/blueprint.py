@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .db import db
 from .models import Pin, BookableRoom
-from .booking import create_booking_ticket, approve_booking, BookingError
+from .booking import create_booking_ticket, approve_booking, close_booking, BookingError
 
 
 floor_plan_bp = Blueprint(
@@ -248,6 +248,28 @@ def api_approve_booking(ticket_id):
     """
     try:
         result = approve_booking(ticket_id)
+    except BookingError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            return jsonify({"error": msg}), 404
+        if "forbidden" in msg.lower() or "login required" in msg.lower():
+            return jsonify({"error": msg}), 403
+        return jsonify({"error": msg}), 400
+    return jsonify(result), 200
+
+
+@floor_plan_bp.route("/api/bookings/<int:ticket_id>/close", methods=["POST"])
+def api_close_booking(ticket_id):
+    """Ops/admin closes a booking with asset return verification.
+
+    Body: {"returns": [{"asset_id": int, "state": "returned_good"|"damaged"|"missing", "notes": str?}, ...]}
+    Updates each asset's status, closes the ticket, persists booking_returns
+    rows, and emails the requester (CCs admin if any return was damaged or
+    missing).
+    """
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = close_booking(ticket_id, payload)
     except BookingError as e:
         msg = str(e)
         if "not found" in msg.lower():

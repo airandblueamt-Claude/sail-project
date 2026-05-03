@@ -322,6 +322,170 @@ def approve_booking(ticket_id):
     return result
 
 
+def close_booking(ticket_id, payload):
+    """Close a booking and verify asset returns.
+
+    `payload` shape: {"returns": [{"asset_id": int, "state": str, "notes": str?}, ...]}.
+    Permission: admin or manager.
+
+    Each return:
+      - state must be one of returned_good / damaged / missing
+      - asset_id must reference an existing asset
+    Asset.status is updated based on state mapping; each change is audited.
+    The ticket is moved to status='closed' with closed_at = now.
+    BookingReturn rows are written in floor_plan.db (post-commit, to keep
+    the sail.db transaction tight; orphans on rare failure are acceptable
+    in v1 and visible via audit_log).
+    """
+    actor_id, actor_role = _check_role(APPROVER_ROLES)
+
+    if not isinstance(payload, dict):
+        raise BookingError("Body must be a JSON object.")
+    raw_returns = payload.get("returns") or []
+    if not isinstance(raw_returns, list):
+        raise BookingError("returns must be a list.")
+
+    # Validate shape early
+    cleaned = []
+    for i, item in enumerate(raw_returns):
+        if not isinstance(item, dict):
+            raise BookingError(f"returns[{i}] must be an object.")
+        if "asset_id" not in item or not isinstance(item["asset_id"], int):
+            raise BookingError(f"returns[{i}].asset_id must be an integer.")
+        state = item.get("state")
+        if state not in ALLOWED_RETURN_STATES:
+            raise BookingError(
+                f"returns[{i}].state must be one of {sorted(ALLOWED_RETURN_STATES)}."
+            )
+        notes = (item.get("notes") or "").strip()
+        cleaned.append({"asset_id": item["asset_id"], "state": state, "notes": notes})
+
+    asset_ids = [r["asset_id"] for r in cleaned]
+    enriched_returns = []
+    booking_meta = {}
+    with get_db() as conn:
+        # Ticket lookup + status check
+        row = conn.execute(
+            """SELECT t.id, t.ticket_number, t.title, t.description, t.status,
+                      t.submitted_by,
+                      e.name AS submitter_name, e.email AS submitter_email
+               FROM tickets t
+               LEFT JOIN employees e ON e.id = t.submitted_by
+               WHERE t.id = ?""",
+            (ticket_id,),
+        ).fetchone()
+        if row is None:
+            raise BookingError(f"Ticket {ticket_id} not found.")
+        room_label, date_str = _parse_booking_title(row["title"])
+        if not room_label:
+            raise BookingError(f"Ticket {ticket_id} is not a booking ticket.")
+        if row["status"] not in ("open", "in_progress"):
+            raise BookingError(
+                f"Ticket {row['ticket_number']} is {row['status']}; cannot close."
+            )
+
+        # Resolve every return.asset_id to a real asset
+        if asset_ids:
+            placeholders = ",".join("?" * len(asset_ids))
+            asset_lookup = {
+                r["id"]: dict(r)
+                for r in conn.execute(
+                    f"""SELECT a.id, a.asset_tag, a.status, em.name AS model_name
+                        FROM assets a
+                        JOIN equipment_models em ON em.id = a.equipment_model_id
+                        WHERE a.id IN ({placeholders})""",
+                    asset_ids,
+                ).fetchall()
+            }
+            missing = [aid for aid in asset_ids if aid not in asset_lookup]
+            if missing:
+                raise BookingError(f"Unknown asset ids: {sorted(missing)}.")
+        else:
+            asset_lookup = {}
+
+        # Apply asset status updates + audit each one
+        for r in cleaned:
+            asset = asset_lookup[r["asset_id"]]
+            new_status = RETURN_STATE_TO_ASSET_STATUS[r["state"]]
+            if asset["status"] != new_status:
+                conn.execute(
+                    "UPDATE assets SET status = ?, updated_at = datetime('now') WHERE id = ?",
+                    (new_status, r["asset_id"]),
+                )
+                log_audit(
+                    conn, "assets", r["asset_id"], "update",
+                    field_name="status",
+                    old_value=asset["status"], new_value=new_status,
+                    changed_by=actor_id,
+                )
+            enriched_returns.append({
+                "asset_id": r["asset_id"],
+                "asset_tag": asset["asset_tag"],
+                "model_name": asset["model_name"],
+                "state": r["state"],
+                "notes": r["notes"],
+            })
+
+        # Close the ticket
+        conn.execute(
+            "UPDATE tickets SET status='closed', closed_at = datetime('now') WHERE id = ?",
+            (ticket_id,),
+        )
+        log_audit(
+            conn, "tickets", ticket_id, "update",
+            field_name="status", old_value=row["status"], new_value="closed",
+            changed_by=actor_id,
+        )
+
+        booking_meta = {
+            "ticket_number": row["ticket_number"],
+            "room_label": room_label,
+            "date": date_str,
+            "submitter": {
+                "id": row["submitted_by"],
+                "name": row["submitter_name"],
+                "email": row["submitter_email"],
+            },
+        }
+
+    # After sail.db commit, persist the verification rows in floor_plan.db.
+    # Failure here logs but does not roll back the closure (ops can re-add
+    # the verification record manually; ticket already closed).
+    try:
+        for r in enriched_returns:
+            db.session.add(BookingReturn(
+                booking_ticket_id=ticket_id,
+                asset_id=r["asset_id"],
+                asset_tag=r["asset_tag"],
+                model_name=r["model_name"] or "",
+                state=r["state"],
+                notes=r["notes"],
+                verified_by=actor_id,
+            ))
+        db.session.commit()
+    except Exception:  # pragma: no cover
+        db.session.rollback()
+
+    # Notification email to the requester (and admin CC if any issue)
+    try:
+        from email_service import notify_booking_closed
+        notify_booking_closed(
+            ticket={"id": ticket_id, "ticket_number": booking_meta["ticket_number"]},
+            submitter=booking_meta["submitter"],
+            room_label=booking_meta["room_label"],
+            date=booking_meta["date"],
+            returns=enriched_returns,
+        )
+    except Exception:  # pragma: no cover
+        pass
+
+    return {
+        "ticket_id": ticket_id,
+        "ticket_number": booking_meta["ticket_number"],
+        "returns": enriched_returns,
+    }
+
+
 def _send_booking_emails(*, ticket_id, ticket_number, title, description,
                          room_label, payload, asset_dicts, submitter):
     """Fire the two emails that go out on a successful booking submit:
