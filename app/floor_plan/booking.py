@@ -421,6 +421,16 @@ def _parse_booking_title(title):
     return (m.group(1), m.group(2)) if m else (None, None)
 
 
+def _parse_assigned_assets_from_description(description):
+    """Return [SAIL-XXX, ...] from the 'Assets assigned:' block written by
+    approve_booking. Distinct from _parse_assets_from_description (which
+    reads the original user-requested 'Assets requested:' block)."""
+    if not description or "Assets assigned:" not in description:
+        return []
+    block = description.split("Assets assigned:", 1)[1]
+    return re.findall(r"-\s+(SAIL-\S+)\b", block)
+
+
 def _parse_times_from_description(description):
     """Best-effort extraction of 'HH:MM - HH:MM' from the description block."""
     if not description:
@@ -539,6 +549,21 @@ def approve_booking(ticket_id):
                         changed_by=actor_id,
                     )
                 assigned.append({"id": a["id"], "asset_tag": a["asset_tag"]})
+
+        # Persist the actual allocation to the ticket description so the close
+        # modal (and any later viewer) can see which specific assets were
+        # picked. Append a single 'Assets assigned:' block — never duplicate.
+        if assigned:
+            new_desc = row["description"] or ""
+            if "Assets assigned:" not in new_desc:
+                lines = ["", "Assets assigned:"]
+                for a in assigned:
+                    lines.append(f"  - {a['asset_tag']}")
+                new_desc = new_desc.rstrip() + "\n" + "\n".join(lines) + "\n"
+                conn.execute(
+                    "UPDATE tickets SET description = ? WHERE id = ?",
+                    (new_desc, ticket_id),
+                )
 
         start_time, end_time = _parse_times_from_description(row["description"])
         result = {

@@ -366,7 +366,8 @@ def api_list_bookings():
     Powers the ops bookings page.
     """
     from .booking import (_parse_booking_title, _parse_times_from_description,
-                          _parse_assets_from_description)
+                          _parse_assets_from_description,
+                          _parse_assigned_assets_from_description)
     from database import get_db
 
     status_q = (request.args.get("status") or "active").lower()
@@ -405,11 +406,18 @@ def api_list_bookings():
     with get_db() as conn:
         rows = conn.execute(sql, params).fetchall()
 
-        # Collect every asset_tag mentioned across all bookings, resolve in one go
+        # Collect every asset_tag mentioned across all bookings — both
+        # user-requested (open tickets) and ops-assigned (in_progress / closed).
+        # Prefer the assigned set when it exists so the close modal sees
+        # the actual allocation.
         all_tags = set()
         parsed = []
         for r in rows:
-            tags = _parse_assets_from_description(r["description"])
+            assigned_tags = _parse_assigned_assets_from_description(r["description"])
+            if assigned_tags:
+                tags = assigned_tags
+            else:
+                tags = _parse_assets_from_description(r["description"])
             parsed.append(tags)
             all_tags.update(tags)
         tag_to_asset = {}
