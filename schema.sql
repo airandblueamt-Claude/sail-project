@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS assets (
     asset_tag           TEXT NOT NULL UNIQUE,      -- "SAIL-16038"
     equipment_model_id  INTEGER NOT NULL REFERENCES equipment_models(id),
     serial_number       TEXT,
+    model_number        TEXT,                      -- per-unit model/PN; defaults from equipment_models on register
     location_id         INTEGER REFERENCES locations(id),
     condition           TEXT DEFAULT 'good'
                         CHECK(condition IN ('good','fair','damaged','decommissioned')),
@@ -109,6 +110,28 @@ CREATE INDEX IF NOT EXISTS idx_assets_location  ON assets(location_id);
 CREATE INDEX IF NOT EXISTS idx_assets_status    ON assets(status);
 CREATE INDEX IF NOT EXISTS idx_assets_condition ON assets(condition);
 CREATE INDEX IF NOT EXISTS idx_assets_assigned  ON assets(assigned_to);
+
+-- ── Custom asset fields (user-defined columns on the Manage Assets table) ──
+-- Admins/managers can create extra fields like "Purchase PO" or "Floor"; each
+-- asset can have one value per field stored in asset_custom_values.
+
+CREATE TABLE IF NOT EXISTS custom_fields (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    is_active   INTEGER DEFAULT 1,
+    created_by  INTEGER REFERENCES employees(id),
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_custom_fields_active ON custom_fields(is_active);
+
+CREATE TABLE IF NOT EXISTS asset_custom_values (
+    asset_id        INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    custom_field_id INTEGER NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
+    value           TEXT,
+    updated_at      TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (asset_id, custom_field_id)
+);
+CREATE INDEX IF NOT EXISTS idx_asset_cv_field ON asset_custom_values(custom_field_id);
 
 -- ── Tickets (maintenance, requests, incidents) ─────────────────────────────
 

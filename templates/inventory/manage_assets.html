@@ -3,26 +3,88 @@
 {% block content %}
 <div class="page-header">
     <h2>Manage Assets</h2>
-    <span class="badge">{{ assets|length }} registered</span>
+    <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge">
+            {% if q or f_status or f_condition or f_category or f_location %}
+                {{ assets|length }} of {{ total_assets }}
+            {% else %}
+                {{ assets|length }} registered
+            {% endif %}
+        </span>
+        <a href="{{ url_for('inventory.custom_fields') }}" class="btn btn-ghost">
+            <i data-lucide="columns"></i> Custom columns
+        </a>
+    </div>
 </div>
 
-<div class="info-banner">
-    <i data-lucide="info"></i>
-    <span>Each row is a physical unit with a unique asset tag. To add more: open <strong>Full Inventory</strong> from the sidebar &rarr; pick a model &rarr; click <strong>+ Register Asset</strong>.</span>
-</div>
+<form method="get" class="filter-bar"
+      style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:0 0 16px 0">
+    <div style="flex:1;min-width:220px">
+        <label class="muted" style="font-size:0.85em">Search</label>
+        <input type="text" name="q" value="{{ q }}" class="input"
+               placeholder="Tag, serial, model #, holder, equipment…">
+    </div>
+    <div>
+        <label class="muted" style="font-size:0.85em">Status</label>
+        <select name="status" class="input">
+            <option value="">All</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if f_status == s %}selected{% endif %}>{{ s|replace('_',' ')|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="muted" style="font-size:0.85em">Condition</label>
+        <select name="condition" class="input">
+            <option value="">All</option>
+            {% for c in conditions %}
+            <option value="{{ c }}" {% if f_condition == c %}selected{% endif %}>{{ c|title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="muted" style="font-size:0.85em">Category</label>
+        <select name="category" class="input">
+            <option value="">All</option>
+            {% for c in categories %}
+            <option value="{{ c.name }}" {% if f_category == c.name %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="muted" style="font-size:0.85em">Location</label>
+        <select name="location" class="input">
+            <option value="">All</option>
+            {% for l in locations %}
+            <option value="{{ l.code }}" {% if f_location == l.code %}selected{% endif %}>{{ l.code }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div style="display:flex;gap:6px">
+        <button type="submit" class="btn btn-primary">Apply</button>
+        {% if q or f_status or f_condition or f_category or f_location %}
+        <a href="{{ url_for('inventory.manage_assets') }}" class="btn btn-ghost">Clear</a>
+        {% endif %}
+    </div>
+</form>
 
 {% if assets %}
+<div style="overflow-x:auto">
 <table class="data-table">
     <thead>
         <tr>
             <th>Asset Tag</th>
             <th>Equipment</th>
+            <th>Model #</th>
             <th>Category</th>
             <th>Serial</th>
             <th>Status</th>
             <th>Location</th>
             <th>Holder</th>
             <th>Condition</th>
+            {% for f in custom_fields %}
+            <th>{{ f.name }}</th>
+            {% endfor %}
         </tr>
     </thead>
     <tbody>
@@ -30,22 +92,33 @@
         <tr>
             <td><a href="{{ url_for('inventory.asset_detail', asset_id=a.id) }}"><strong>{{ a.asset_tag }}</strong></a></td>
             <td>{{ a.eq_name }}</td>
+            <td>{{ a.model_number or '—' }}</td>
             <td><span class="badge badge-cat">{{ a.category_name }}</span></td>
             <td>{{ a.serial_number or '—' }}</td>
             <td><span class="badge badge-status-{{ a.status }}">{{ a.status|replace('_',' ') }}</span></td>
             <td>{{ a.location_code or '—' }}</td>
             <td>{{ a.assigned_to_name or a.holder_name or '—' }}</td>
             <td><span class="badge badge-{{ a.condition }}">{{ a.condition }}</span></td>
+            {% for f in custom_fields %}
+            <td>{{ cf_values.get(a.id, {}).get(f.id, '') or '—' }}</td>
+            {% endfor %}
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</div>
 {% else %}
 <div class="empty-state">
     <i data-lucide="hard-drive"></i>
-    <p>No individual assets registered yet.</p>
-    <p class="muted">Go to an equipment model and click "Register Asset" to add physical units.</p>
-    <a href="{{ url_for('inventory.models') }}" class="btn btn-primary" style="margin-top:12px">Browse Equipment Models</a>
+    {% if q or f_status or f_condition or f_category or f_location %}
+        <p>No assets match your search.</p>
+        <p class="muted">Try clearing some filters.</p>
+        <a href="{{ url_for('inventory.manage_assets') }}" class="btn btn-ghost" style="margin-top:12px">Clear filters</a>
+    {% else %}
+        <p>No individual assets registered yet.</p>
+        <p class="muted">Go to an equipment model and click "Register Asset" to add physical units.</p>
+        <a href="{{ url_for('inventory.models') }}" class="btn btn-primary" style="margin-top:12px">Browse Equipment Models</a>
+    {% endif %}
 </div>
 <script>lucide.createIcons();</script>
 {% endif %}

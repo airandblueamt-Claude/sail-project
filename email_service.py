@@ -55,32 +55,38 @@ def _base_html(content):
 # ── Notification functions ───────────────────────────────────────────
 
 def notify_ticket_created(ticket, submitter):
-    """Notify admin of new ticket."""
+    """Email the ticket creator confirming their submission, and copy admin."""
     priority_colors = {'low': '#22c55e', 'medium': '#f59e0b', 'high': '#f97316', 'critical': '#ef4444'}
-    pcolor = priority_colors.get(ticket['priority'], '#8a8fa8')
+    pcolor = priority_colors.get(ticket.get('priority', 'medium'), '#8a8fa8')
+    asset_label = f"{ticket.get('asset_tag') or ''} — {ticket.get('equipment_name') or ''}".strip(" —")
 
-    send_email(ADMIN_EMAIL, f"New Ticket {ticket['ticket_number']}: {ticket['title']}",
-        _base_html(f"""
-            <h2 style="margin-top:0;">New Ticket</h2>
-            <table style="width:100%;border-collapse:collapse;font-size:14px;">
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Ticket</td>
-                    <td style="padding:6px 0;"><strong>{ticket['ticket_number']}</strong></td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Type</td>
-                    <td style="padding:6px 0;">{ticket['type']}</td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Priority</td>
-                    <td style="padding:6px 0;"><span style="color:{pcolor};font-weight:bold;">{ticket['priority'].upper()}</span></td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Submitted by</td>
-                    <td style="padding:6px 0;">{submitter['name']} ({submitter.get('email','')})</td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Title</td>
-                    <td style="padding:6px 0;">{ticket['title']}</td></tr>
-                <tr><td style="padding:6px 0;color:#8a8fa8;">Description</td>
-                    <td style="padding:6px 0;">{ticket.get('description','—')}</td></tr>
-            </table>
-            <p style="margin-top:16px;">
-                <a href="{APP_URL}/tickets/" style="display:inline-block;background:#4f6ef7;color:#fff;
-                   padding:10px 24px;border-radius:4px;text-decoration:none;">View Tickets</a>
-            </p>
-        """))
+    body = _base_html(f"""
+        <h2 style="margin-top:0;">Ticket {ticket['ticket_number']} created</h2>
+        <p>Hi {submitter.get('name', '')},</p>
+        <p>Your ticket has been recorded. The AMT team will follow up.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Ticket</td>
+                <td style="padding:6px 0;"><strong>{ticket['ticket_number']}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Asset</td>
+                <td style="padding:6px 0;">{asset_label or '—'}</td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Priority</td>
+                <td style="padding:6px 0;"><span style="color:{pcolor};font-weight:bold;">{ticket.get('priority', 'medium').upper()}</span></td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Title</td>
+                <td style="padding:6px 0;">{ticket['title']}</td></tr>
+            <tr><td style="padding:6px 0;color:#8a8fa8;">Description</td>
+                <td style="padding:6px 0;">{(ticket.get('description') or '—').replace(chr(10), '<br>')}</td></tr>
+        </table>
+        <p style="margin-top:16px;">
+            <a href="{APP_URL}/tickets/{ticket.get('id', '')}" style="display:inline-block;background:#4f6ef7;color:#fff;
+               padding:10px 24px;border-radius:4px;text-decoration:none;">View Ticket</a>
+        </p>
+    """)
+
+    creator_email = submitter.get('email') if submitter else None
+    if creator_email:
+        send_email(creator_email, f"Ticket {ticket['ticket_number']} created: {ticket['title']}", body)
+    if ADMIN_EMAIL and ADMIN_EMAIL != creator_email:
+        send_email(ADMIN_EMAIL, f"New Ticket {ticket['ticket_number']}: {ticket['title']}", body)
 
 
 def notify_affected_user(ticket, kind):

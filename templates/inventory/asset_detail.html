@@ -29,8 +29,11 @@
         <tr><th>Status</th><td><span class="badge">{{ asset.status }}</span></td></tr>
         <tr><th>Condition</th><td>{{ asset.condition }}</td></tr>
         <tr><th>Serial</th><td>{{ asset.serial_number or '—' }}</td></tr>
-        <tr><th>Holder (from import)</th><td>{{ asset.holder_name or '—' }}</td></tr>
+        <tr><th>Holder</th><td>{{ asset.holder_name or '—' }}</td></tr>
         {% if asset.notes %}<tr><th>Notes</th><td>{{ asset.notes }}</td></tr>{% endif %}
+        {% for p in custom_pairs %}
+        <tr><th>{{ p.name }}</th><td>{{ p.value or '—' }}</td></tr>
+        {% endfor %}
     </table>
 </div>
 

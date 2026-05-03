@@ -114,16 +114,20 @@ def new_ticket():
             ))
             log_audit(conn, 'tickets', cur.lastrowid, 'create',
                       changed_by=g.user['id'])
-            # Send "we got your ticket" to the affected user (no-op if blank).
+            # Pull the freshly-created ticket so we can email the creator and,
+            # if set, the affected end user.
             created = conn.execute("""
-                SELECT t.ticket_number, t.title, t.description, t.resolution,
-                       t.affected_user_email, a.asset_tag, em.name AS equipment_name
+                SELECT t.id, t.ticket_number, t.title, t.description, t.priority,
+                       t.resolution, t.affected_user_email,
+                       a.asset_tag, em.name AS equipment_name
                 FROM tickets t
                 LEFT JOIN assets a ON t.asset_id = a.id
                 LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
                 WHERE t.id = ?
             """, (cur.lastrowid,)).fetchone()
-            notify_affected_user(dict(created), 'created')
+            created = dict(created)
+            notify_ticket_created(created, g.user)
+            notify_affected_user(created, 'created')
             flash(f'Ticket {ticket_num} created.', 'success')
             return redirect(url_for('tickets.ticket_detail', ticket_id=cur.lastrowid))
 

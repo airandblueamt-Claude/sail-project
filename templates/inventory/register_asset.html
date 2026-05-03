@@ -32,6 +32,11 @@
             <input type="text" name="serial_number" class="input" placeholder="Manufacturer serial number">
         </div>
         <div class="form-row">
+            <label>Model Number</label>
+            <input type="text" name="model_number" value="{{ model.model_number or '' }}" class="input"
+                   placeholder="Model / part number for this unit">
+        </div>
+        <div class="form-row">
             <label>Location</label>
             <select name="location_id" class="input">
                 <option value="">-- Not Set --</option>

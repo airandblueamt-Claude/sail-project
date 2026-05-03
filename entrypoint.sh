@@ -23,7 +23,11 @@ if [ ! -f "$DB_FILE" ]; then
     python init_db.py
     python import_assets_v3.py
 else
-    echo "[entrypoint] DB exists at $DB_FILE — skipping bootstrap"
+    # schema.sql is fully idempotent (CREATE TABLE/INDEX IF NOT EXISTS).
+    # Re-applying it on every boot picks up any newly added tables/indexes
+    # without touching existing data.
+    echo "[entrypoint] DB exists at $DB_FILE — applying schema.sql for any new tables"
+    python -c "import sqlite3, os; conn = sqlite3.connect(os.environ.get('SAIL_DB_PATH', '$DB_FILE')); conn.executescript(open('schema.sql').read()); conn.commit(); conn.close()"
 fi
 
 # Run the production WSGI server.

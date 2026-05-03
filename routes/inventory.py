@@ -276,8 +276,33 @@ def manage_assets():
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard.index'))
 
+    q = request.args.get('q', '').strip()
+    f_status = request.args.get('status', '').strip()
+    f_condition = request.args.get('condition', '').strip()
+    f_category = request.args.get('category', '').strip()
+    f_location = request.args.get('location', '').strip()
+
+    where, params = [], []
+    if q:
+        where.append("""(
+            a.asset_tag LIKE ? OR a.serial_number LIKE ? OR a.model_number LIKE ?
+            OR a.holder_name LIKE ? OR em.name LIKE ? OR em.brand LIKE ?
+        )""")
+        like = f'%{q}%'
+        params += [like, like, like, like, like, like]
+    if f_status:
+        where.append("a.status = ?"); params.append(f_status)
+    if f_condition:
+        where.append("a.condition = ?"); params.append(f_condition)
+    if f_category:
+        where.append("c.name = ?"); params.append(f_category)
+    if f_location:
+        where.append("l.code = ?"); params.append(f_location)
+
+    where_sql = " WHERE " + " AND ".join(where) if where else ""
+
     with get_db() as conn:
-        assets = conn.execute("""
+        assets = conn.execute(f"""
             SELECT a.*, em.name as eq_name, em.brand,
                    c.name as category_name,
                    l.code as location_code,
@@ -287,17 +312,55 @@ def manage_assets():
             JOIN categories c ON em.category_id = c.id
             LEFT JOIN locations l ON a.location_id = l.id
             LEFT JOIN employees e ON a.assigned_to = e.id
+            {where_sql}
             ORDER BY a.asset_tag
-        """).fetchall()
+        """, params).fetchall()
 
-    return render_template('inventory/manage_assets.html', assets=assets)
+        total_assets = conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0]
+
+        categories = conn.execute(
+            "SELECT DISTINCT c.name FROM categories c "
+            "JOIN equipment_models em ON em.category_id = c.id "
+            "JOIN assets a ON a.equipment_model_id = em.id "
+            "ORDER BY c.name"
+        ).fetchall()
+        locations = conn.execute(
+            "SELECT DISTINCT l.code FROM locations l "
+            "JOIN assets a ON a.location_id = l.id "
+            "ORDER BY l.code"
+        ).fetchall()
+
+        custom_fields = conn.execute(
+            "SELECT id, name FROM custom_fields WHERE is_active = 1 ORDER BY name"
+        ).fetchall()
+
+        cf_rows = conn.execute("""
+            SELECT asset_id, custom_field_id, value
+            FROM asset_custom_values
+        """).fetchall()
+        cf_values = {}
+        for r in cf_rows:
+            cf_values.setdefault(r['asset_id'], {})[r['custom_field_id']] = r['value']
+
+    return render_template('inventory/manage_assets.html',
+                           assets=assets,
+                           total_assets=total_assets,
+                           categories=categories,
+                           locations=locations,
+                           statuses=('available', 'in_use', 'reserved', 'checked_out',
+                                     'maintenance', 'decommissioned', 'missing'),
+                           conditions=('good', 'fair', 'damaged', 'decommissioned'),
+                           q=q, f_status=f_status, f_condition=f_condition,
+                           f_category=f_category, f_location=f_location,
+                           custom_fields=custom_fields,
+                           cf_values=cf_values)
 
 
 @inventory_bp.route('/asset/<int:asset_id>')
 def asset_detail(asset_id):
     with get_db() as conn:
         asset = conn.execute("""
-            SELECT a.*, em.name AS model_name, em.brand, em.model_number,
+            SELECT a.*, em.name AS model_name, em.brand,
                    c.name AS category_name,
                    COALESCE(l.label, l.code) AS location_name
             FROM assets a
@@ -322,8 +385,18 @@ def asset_detail(asset_id):
             ORDER BY t.created_at DESC
         """, (asset_id,)).fetchall()
 
+        custom_pairs = conn.execute("""
+            SELECT cf.name, acv.value
+            FROM custom_fields cf
+            LEFT JOIN asset_custom_values acv
+                   ON acv.custom_field_id = cf.id AND acv.asset_id = ?
+            WHERE cf.is_active = 1
+            ORDER BY cf.name COLLATE NOCASE
+        """, (asset_id,)).fetchall()
+
     return render_template('inventory/asset_detail.html',
-                           asset=asset, tickets=tickets)
+                           asset=asset, tickets=tickets,
+                           custom_pairs=custom_pairs)
 
 
 @inventory_bp.route('/asset/<int:asset_id>/edit', methods=['GET', 'POST'])
@@ -341,7 +414,7 @@ def edit_asset(asset_id):
 
     with get_db() as conn:
         asset = conn.execute("""
-            SELECT a.*, em.name AS model_name, em.brand, em.model_number,
+            SELECT a.*, em.name AS model_name, em.brand,
                    c.name AS category_name
             FROM assets a
             JOIN equipment_models em ON a.equipment_model_id = em.id
@@ -356,19 +429,39 @@ def edit_asset(asset_id):
             "SELECT id, code, label FROM locations ORDER BY code"
         ).fetchall()
 
+        custom_fields = conn.execute(
+            "SELECT id, name FROM custom_fields WHERE is_active = 1 ORDER BY name"
+        ).fetchall()
+        existing_cf = {
+            r['custom_field_id']: r['value']
+            for r in conn.execute(
+                "SELECT custom_field_id, value FROM asset_custom_values WHERE asset_id = ?",
+                (asset_id,)
+            ).fetchall()
+        }
+
         if request.method == 'POST':
             status = request.form.get('status', '')
             condition = request.form.get('condition', '')
             location_id_raw = request.form.get('location_id', '')
             serial = request.form.get('serial_number', '').strip() or None
+            model_number = request.form.get('model_number', '').strip() or None
+            holder_name = request.form.get('holder_name', '').strip() or None
             qty_raw = request.form.get('qty_represented', '')
             notes = request.form.get('notes', '').strip() or None
+
+            submitted_cf = {}
+            for f in custom_fields:
+                raw = request.form.get(f'cf_{f["id"]}', '').strip()
+                submitted_cf[f['id']] = raw or None
 
             submitted = {
                 'status': status,
                 'condition': condition,
                 'location_id': int(location_id_raw) if location_id_raw.isdigit() else None,
                 'serial_number': serial or '',
+                'model_number': model_number or '',
+                'holder_name': holder_name or '',
                 'qty_represented': qty_raw,
                 'notes': notes or '',
             }
@@ -379,7 +472,9 @@ def edit_asset(asset_id):
                                        asset=asset, locations=locations,
                                        values=submitted,
                                        statuses=STATUS_VALUES,
-                                       conditions=CONDITION_VALUES)
+                                       conditions=CONDITION_VALUES,
+                                       custom_fields=custom_fields,
+                                       cf_values=submitted_cf)
 
             if status not in STATUS_VALUES:
                 return _reject('Invalid status.')
@@ -410,6 +505,8 @@ def edit_asset(asset_id):
                 'condition': condition,
                 'location_id': location_id,
                 'serial_number': serial,
+                'model_number': model_number,
+                'holder_name': holder_name,
                 'qty_represented': qty,
                 'notes': notes,
             }
@@ -417,19 +514,47 @@ def edit_asset(asset_id):
                        for col, new_val in new_values.items()
                        if asset[col] != new_val}
 
-            if not changes:
+            cf_changes = []
+            for f in custom_fields:
+                old_val = existing_cf.get(f['id'])
+                new_val = submitted_cf.get(f['id'])
+                if (old_val or None) != (new_val or None):
+                    cf_changes.append((f, old_val, new_val))
+
+            if not changes and not cf_changes:
                 flash('No changes.', 'info')
                 return redirect(url_for('inventory.asset_detail', asset_id=asset_id))
 
-            set_clause = ', '.join(f"{col} = ?" for col in changes)
-            params = [new_values[col] for col in changes] + [asset_id]
-            conn.execute(
-                f"UPDATE assets SET {set_clause}, updated_at = datetime('now') WHERE id = ?",
-                params,
-            )
-            for col, (old, new) in changes.items():
+            if changes:
+                set_clause = ', '.join(f"{col} = ?" for col in changes)
+                params = [new_values[col] for col in changes] + [asset_id]
+                conn.execute(
+                    f"UPDATE assets SET {set_clause}, updated_at = datetime('now') WHERE id = ?",
+                    params,
+                )
+                for col, (old, new) in changes.items():
+                    log_audit(conn, 'assets', asset_id, 'update',
+                              field_name=col, old_value=old, new_value=new,
+                              changed_by=g.user['id'])
+
+            for f, old_val, new_val in cf_changes:
+                if new_val is None:
+                    conn.execute(
+                        "DELETE FROM asset_custom_values "
+                        "WHERE asset_id = ? AND custom_field_id = ?",
+                        (asset_id, f['id']))
+                else:
+                    conn.execute("""
+                        INSERT INTO asset_custom_values
+                            (asset_id, custom_field_id, value, updated_at)
+                        VALUES (?, ?, ?, datetime('now'))
+                        ON CONFLICT(asset_id, custom_field_id)
+                        DO UPDATE SET value = excluded.value,
+                                      updated_at = datetime('now')
+                    """, (asset_id, f['id'], new_val))
                 log_audit(conn, 'assets', asset_id, 'update',
-                          field_name=col, old_value=old, new_value=new,
+                          field_name=f'custom:{f["name"]}',
+                          old_value=old_val, new_value=new_val,
                           changed_by=g.user['id'])
 
             flash(f'Asset {asset["asset_tag"]} updated.', 'success')
@@ -441,6 +566,8 @@ def edit_asset(asset_id):
             'condition': asset['condition'],
             'location_id': asset['location_id'],
             'serial_number': asset['serial_number'] or '',
+            'model_number': asset['model_number'] or '',
+            'holder_name': asset['holder_name'] or '',
             'qty_represented': asset['qty_represented'],
             'notes': asset['notes'] or '',
         }
@@ -449,7 +576,9 @@ def edit_asset(asset_id):
                            asset=asset, locations=locations,
                            values=values,
                            statuses=STATUS_VALUES,
-                           conditions=CONDITION_VALUES)
+                           conditions=CONDITION_VALUES,
+                           custom_fields=custom_fields,
+                           cf_values=existing_cf)
 
 
 @inventory_bp.route('/assets/register/<int:model_id>', methods=['GET', 'POST'])
@@ -471,6 +600,7 @@ def register_asset(model_id):
         if request.method == 'POST':
             asset_tag = request.form['asset_tag'].strip()
             serial = request.form.get('serial_number', '').strip() or None
+            model_number = request.form.get('model_number', '').strip() or None
             location_id = request.form.get('location_id', type=int) or None
             condition = request.form.get('condition', 'good')
             notes = request.form.get('notes', '').strip()
@@ -484,9 +614,9 @@ def register_asset(model_id):
 
             cur = conn.execute("""
                 INSERT INTO assets (asset_tag, equipment_model_id, serial_number,
-                                    location_id, condition, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (asset_tag, model_id, serial, location_id, condition, notes))
+                                    model_number, location_id, condition, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (asset_tag, model_id, serial, model_number, location_id, condition, notes))
             log_audit(conn, 'assets', cur.lastrowid, 'create',
                       changed_by=g.user['id'])
             flash(f'Asset {asset_tag} registered.', 'success')
@@ -511,6 +641,93 @@ def register_asset(model_id):
     return render_template('inventory/register_asset.html',
                            model=model, suggested_tag=suggested_tag,
                            locations=locations)
+
+
+# ── Admin: custom asset columns ──────────────────────────────────────
+
+@inventory_bp.route('/custom-fields', methods=['GET', 'POST'])
+def custom_fields():
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard.index'))
+
+    with get_db() as conn:
+        if request.method == 'POST':
+            name = request.form.get('name', '').strip()
+            if not name:
+                flash('Column name is required.', 'error')
+                return redirect(url_for('inventory.custom_fields'))
+            if len(name) > 60:
+                flash('Column name must be 60 characters or fewer.', 'error')
+                return redirect(url_for('inventory.custom_fields'))
+            try:
+                cur = conn.execute(
+                    "INSERT INTO custom_fields (name, is_active, created_by) "
+                    "VALUES (?, 1, ?)",
+                    (name, g.user['id']))
+                log_audit(conn, 'custom_fields', cur.lastrowid, 'create',
+                          field_name='name', new_value=name,
+                          changed_by=g.user['id'])
+                flash(f'Column "{name}" added.', 'success')
+            except Exception as e:
+                if 'UNIQUE' in str(e):
+                    flash('A column with that name already exists.', 'error')
+                else:
+                    raise
+            return redirect(url_for('inventory.custom_fields'))
+
+        fields = conn.execute("""
+            SELECT cf.*, e.name AS creator_name,
+                   (SELECT COUNT(*) FROM asset_custom_values WHERE custom_field_id = cf.id) AS value_count
+            FROM custom_fields cf
+            LEFT JOIN employees e ON cf.created_by = e.id
+            ORDER BY cf.is_active DESC, cf.name COLLATE NOCASE
+        """).fetchall()
+
+    return render_template('inventory/custom_fields.html', fields=fields)
+
+
+@inventory_bp.route('/custom-fields/<int:field_id>/toggle', methods=['POST'])
+def toggle_custom_field(field_id):
+    if g.user['role'] not in ('admin', 'manager', 'technician'):
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard.index'))
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT name, is_active FROM custom_fields WHERE id = ?",
+            (field_id,)).fetchone()
+        if not row:
+            flash('Column not found.', 'error')
+            return redirect(url_for('inventory.custom_fields'))
+        new_active = 0 if row['is_active'] else 1
+        conn.execute("UPDATE custom_fields SET is_active = ? WHERE id = ?",
+                     (new_active, field_id))
+        log_audit(conn, 'custom_fields', field_id, 'status_change',
+                  field_name='is_active',
+                  old_value=row['is_active'], new_value=new_active,
+                  changed_by=g.user['id'])
+        flash(f'"{row["name"]}" {"reactivated" if new_active else "hidden"}.', 'success')
+    return redirect(url_for('inventory.custom_fields'))
+
+
+@inventory_bp.route('/custom-fields/<int:field_id>/delete', methods=['POST'])
+def delete_custom_field(field_id):
+    if g.user['role'] not in ('admin', 'manager'):
+        flash('Only admins or managers can delete a column.', 'error')
+        return redirect(url_for('inventory.custom_fields'))
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT name FROM custom_fields WHERE id = ?", (field_id,)
+        ).fetchone()
+        if not row:
+            flash('Column not found.', 'error')
+            return redirect(url_for('inventory.custom_fields'))
+        conn.execute("DELETE FROM custom_fields WHERE id = ?", (field_id,))
+        log_audit(conn, 'custom_fields', field_id, 'delete',
+                  field_name='name', old_value=row['name'],
+                  changed_by=g.user['id'])
+        flash(f'Column "{row["name"]}" deleted (values removed).', 'success')
+    return redirect(url_for('inventory.custom_fields'))
 
 
 @inventory_bp.route('/locations/add', methods=['POST'])

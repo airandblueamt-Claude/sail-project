@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Custom Asset Columns{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('inventory.manage_assets') }}" class="breadcrumb">Manage Assets</a>
+        <h2>Custom Columns</h2>
+        <p class="muted">Add extra fields to track on every asset (e.g. Purchase PO, Floor, Owner Department). They appear as new columns in the Manage Assets table and as inputs on the asset edit page.</p>
+    </div>
+</div>
+
+<form method="post" class="form-card" style="max-width:560px;margin-bottom:24px">
+    <div class="form-row" style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1">
+            <label>New column name</label>
+            <input type="text" name="name" class="input" required maxlength="60"
+                   placeholder="e.g. Purchase PO">
+        </div>
+        <button type="submit" class="btn btn-primary">Add column</button>
+    </div>
+</form>
+
+{% if fields %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Values stored</th>
+            <th>Created by</th>
+            <th>Created</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for f in fields %}
+        <tr {% if not f.is_active %}style="opacity:.55"{% endif %}>
+            <td><strong>{{ f.name }}</strong></td>
+            <td>
+                {% if f.is_active %}
+                    <span class="badge badge-success">Active</span>
+                {% else %}
+                    <span class="badge badge-muted">Hidden</span>
+                {% endif %}
+            </td>
+            <td>{{ f.value_count }}</td>
+            <td>{{ f.creator_name or '—' }}</td>
+            <td>{{ f.created_at[:10] }}</td>
+            <td style="white-space:nowrap">
+                <form method="post" action="{{ url_for('inventory.toggle_custom_field', field_id=f.id) }}" style="display:inline">
+                    <button type="submit" class="btn btn-sm btn-ghost">
+                        {% if f.is_active %}Hide{% else %}Show{% endif %}
+                    </button>
+                </form>
+                {% if g.user.role in ('admin', 'manager') %}
+                <form method="post" action="{{ url_for('inventory.delete_custom_field', field_id=f.id) }}" style="display:inline"
+                      onsubmit="return confirm('Delete column &quot;{{ f.name }}&quot;? All values stored under it will be removed.');">
+                    <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--danger,#c0392b)">Delete</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="columns"></i>
+    <p>No custom columns yet.</p>
+    <p class="muted">Use the form above to add your first one.</p>
+</div>
+<script>lucide.createIcons();</script>
+{% endif %}
+{% endblock %}
