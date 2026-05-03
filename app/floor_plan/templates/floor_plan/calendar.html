@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block title %}Booking calendar — SAIL{% endblock %}
+{% block extra_head %}
+<style>
+.cal-toolbar {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  margin-bottom: 16px; padding: 12px 16px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+}
+.cal-toolbar .grow { flex: 1; }
+.cal-toolbar select, .cal-toolbar button {
+  padding: 6px 12px; font-size: 13px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg-card);
+  color: var(--text); cursor: pointer; font-family: inherit;
+}
+.cal-toolbar select { min-width: 200px; }
+.cal-toolbar .week-label { font-weight: 500; padding: 0 12px; }
+
+.cal-legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-muted); }
+.cal-leg-swatch {
+  display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+  vertical-align: middle; margin-right: 4px;
+}
+.cal-leg-free    { background: rgba(34,197,94,0.20);  border: 1px solid var(--green); }
+.cal-leg-booked  { background: rgba(239,68,68,0.30); border: 1px solid var(--red); }
+
+/* Grid layout — 1 narrow time column + 7 day columns */
+.cal-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.cal-cell {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.cal-cell:nth-child(8n) { border-right: none; }   /* last column */
+
+.cal-head {
+  padding: 10px 8px; text-align: center;
+  background: var(--bg); font-size: 13px; font-weight: 500;
+}
+.cal-head.today { color: var(--accent); }
+.cal-head .small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; }
+
+.cal-time {
+  padding: 4px 6px; text-align: right; font-size: 10px;
+  font-family: ui-monospace, monospace; color: var(--text-muted);
+  background: var(--bg);
+}
+
+/* Day column: relative wrapper so booking blocks can absolutely position */
+.cal-day {
+  position: relative;
+  background: rgba(34,197,94,0.06);
+  cursor: crosshair;
+  min-height: calc(36 * 14px);    /* 36 slots × 14px each */
+}
+.cal-day:hover { background: rgba(34,197,94,0.12); }
+.cal-day.past { background: var(--bg); cursor: not-allowed; opacity: 0.6; }
+.cal-day.past:hover { background: var(--bg); }
+
+.cal-block {
+  position: absolute; left: 2px; right: 2px;
+  background: rgba(239,68,68,0.20);
+  border-left: 3px solid var(--red);
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-size: 10px;
+  color: var(--text);
+  overflow: hidden;
+  pointer-events: auto;
+  cursor: default;
+}
+.cal-block.in_progress { background: rgba(79,110,247,0.20); border-left-color: var(--accent); }
+.cal-block .who { font-weight: 500; }
+.cal-block .tno { font-family: ui-monospace, monospace; opacity: 0.7; font-size: 9px; }
+
+.cal-help { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+/* Quick-book pop */
+.cal-popup {
+  position: absolute; z-index: 1000;
+  background: var(--bg-card); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 12px; box-shadow: var(--shadow-lg);
+  min-width: 220px;
+}
+.cal-popup h4 { margin: 0 0 8px 0; font-size: 13px; }
+.cal-popup p  { margin: 4px 0; font-size: 12px; color: var(--text-muted); }
+.cal-popup .actions { display: flex; gap: 6px; margin-top: 10px; }
+.cal-popup .actions button { padding: 6px 12px; font-size: 12px; border-radius: 4px; cursor: pointer; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Booking calendar</h2>
+    <p class="breadcrumb">See free and booked time per room. Click a free slot to book.</p>
+  </div>
+</div>
+
+<div class="cal-toolbar">
+  <label>
+    Room
+    <select id="cal-room"></select>
+  </label>
+  <button id="cal-prev" type="button" title="Previous week">◀</button>
+  <span class="week-label" id="cal-week-label"></span>
+  <button id="cal-next" type="button" title="Next week">▶</button>
+  <button id="cal-today" type="button">Today</button>
+  <div class="grow"></div>
+  <div class="cal-legend">
+    <span><span class="cal-leg-swatch cal-leg-free"></span>Free</span>
+    <span><span class="cal-leg-swatch cal-leg-booked"></span>Booked</span>
+  </div>
+</div>
+
+<div class="cal-grid" id="cal-grid"></div>
+<p class="cal-help">Click any green area to start a booking — you'll land on the floor plan with the date and start time prefilled.</p>
+
+<script>
+(() => {
+  const API = "/floor-plan/api";
+  const SLOT_MIN = 15;
+  const LAB_OPEN_MIN = 7 * 60;
+  const LAB_CLOSE_MIN = 16 * 60;
+  const SLOT_PX = 14;       // height of one 15-min slot in the day column
+  const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  let bookableRooms = [];
+  let currentZone = '';
+  let currentMonday = mondayOf(new Date());
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function mondayOf(date) {
+    const d = new Date(date);
+    d.setHours(0,0,0,0);
+    const dow = (d.getDay() + 6) % 7; // Mon=0..Sun=6
+    d.setDate(d.getDate() - dow);
+    return d;
+  }
+  function addDays(date, n) {
+    const d = new Date(date); d.setDate(d.getDate() + n); return d;
+  }
+  function fmtIso(date) {
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+  }
+  function fmtNice(date) {
+    return date.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+  }
+  function fmtMin(m) { return `${pad(Math.floor(m/60))}:${pad(m%60)}`; }
+  function parseHM(s) {
+    const [h,m] = s.split(':').map(Number);
+    return h*60+m;
+  }
+
+  async function init() {
+    // Load bookable rooms
+    try {
+      const r = await fetch(`${API}/bookable-rooms`);
+      bookableRooms = await r.json();
+    } catch (_) { bookableRooms = []; }
+    const sel = document.getElementById('cal-room');
+    sel.replaceChildren();
+    bookableRooms.forEach(room => {
+      const o = document.createElement('option');
+      o.value = room.zone_key;
+      o.textContent = room.label;
+      sel.appendChild(o);
+    });
+    if (bookableRooms.length) {
+      currentZone = bookableRooms[0].zone_key;
+      sel.value = currentZone;
+    }
+    sel.addEventListener('change', () => { currentZone = sel.value; render(); });
+    document.getElementById('cal-prev').addEventListener('click', () => { currentMonday = addDays(currentMonday, -7); render(); });
+    document.getElementById('cal-next').addEventListener('click', () => { currentMonday = addDays(currentMonday, 7); render(); });
+    document.getElementById('cal-today').addEventListener('click', () => { currentMonday = mondayOf(new Date()); render(); });
+
+    render();
+  }
+
+  async function render() {
+    const grid = document.getElementById('cal-grid');
+    const label = document.getElementById('cal-week-label');
+    grid.replaceChildren();
+
+    const sunday = addDays(currentMonday, 6);
+    label.textContent = `${fmtNice(currentMonday)} – ${fmtNice(sunday)}, ${sunday.getFullYear()}`;
+
+    if (!currentZone) {
+      const e = document.createElement('div');
+      e.style.padding = '24px'; e.style.gridColumn = '1 / -1';
+      e.style.textAlign = 'center'; e.style.color = 'var(--text-muted)';
+      e.textContent = 'No bookable rooms configured.';
+      grid.appendChild(e);
+      return;
+    }
+
+    // Header row: blank corner + 7 day headers
+    const corner = document.createElement('div');
+    corner.className = 'cal-cell cal-head';
+    grid.appendChild(corner);
+
+    const today = fmtIso(new Date());
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(currentMonday, i);
+      const head = document.createElement('div');
+      head.className = 'cal-cell cal-head';
+      if (fmtIso(d) === today) head.classList.add('today');
+      const name = document.createElement('strong');
+      name.textContent = DAY_NAMES[i];
+      head.appendChild(name);
+      const sub = document.createElement('span');
+      sub.className = 'small';
+      sub.textContent = fmtNice(d);
+      head.appendChild(sub);
+      grid.appendChild(head);
+    }
+
+    // Body row: time column + 7 day columns
+    const timeCol = document.createElement('div');
+    timeCol.className = 'cal-cell';
+    timeCol.style.padding = '0';
+    timeCol.style.background = 'var(--bg)';
+    for (let m = LAB_OPEN_MIN; m < LAB_CLOSE_MIN; m += 60) {
+      const t = document.createElement('div');
+      t.className = 'cal-time';
+      t.style.height = `${4 * SLOT_PX}px`;
+      t.style.lineHeight = `${4 * SLOT_PX}px`;
+      t.textContent = fmtMin(m);
+      timeCol.appendChild(t);
+    }
+    grid.appendChild(timeCol);
+
+    // Day columns — fetch schedule in parallel
+    const dayCols = [];
+    for (let i = 0; i < 7; i++) {
+      const col = document.createElement('div');
+      col.className = 'cal-cell cal-day';
+      const isoDate = fmtIso(addDays(currentMonday, i));
+      col.dataset.date = isoDate;
+      if (isoDate < today) col.classList.add('past');
+      // Capture click for quick-book popup
+      col.addEventListener('click', (ev) => onDayClick(ev, col));
+      grid.appendChild(col);
+      dayCols.push({ col, isoDate });
+    }
+
+    // Fetch each day's schedule and render blocks
+    await Promise.all(dayCols.map(async ({col, isoDate}) => {
+      let data;
+      try {
+        const r = await fetch(`${API}/rooms/${encodeURIComponent(currentZone)}/schedule?date=${isoDate}`);
+        if (!r.ok) return;
+        data = await r.json();
+      } catch (_) { return; }
+      (data.bookings || []).forEach(b => {
+        const startM = parseHM(b.start_time);
+        const endM = parseHM(b.end_time);
+        const top = ((startM - LAB_OPEN_MIN) / SLOT_MIN) * SLOT_PX;
+        const height = ((endM - startM) / SLOT_MIN) * SLOT_PX;
+        const block = document.createElement('div');
+        block.className = 'cal-block ' + (b.status || '');
+        block.style.top = `${top}px`;
+        block.style.height = `${Math.max(height - 1, 14)}px`;
+        block.title = `${b.ticket_number} · ${b.start_time}–${b.end_time}`
+          + (b.submitter_name ? ` · ${b.submitter_name}` : '')
+          + ` (${b.status})`;
+        const who = document.createElement('div');
+        who.className = 'who';
+        who.textContent = `${b.start_time} ${b.submitter_name || ''}`;
+        const tno = document.createElement('div');
+        tno.className = 'tno';
+        tno.textContent = b.ticket_number;
+        block.appendChild(who);
+        block.appendChild(tno);
+        // Stop propagation so clicking a block doesn't open quick-book
+        block.addEventListener('click', e => e.stopPropagation());
+        col.appendChild(block);
+      });
+    }));
+  }
+
+  function onDayClick(ev, col) {
+    if (col.classList.contains('past')) return;
+    closePopup();
+    const rect = col.getBoundingClientRect();
+    const offsetY = ev.clientY - rect.top;
+    const slotIdx = Math.floor(offsetY / SLOT_PX);
+    const startM = LAB_OPEN_MIN + Math.max(0, Math.min(slotIdx, 35)) * SLOT_MIN;
+    const endM = Math.min(startM + 60, LAB_CLOSE_MIN);
+    const date = col.dataset.date;
+    const startHM = fmtMin(startM);
+    const endHM = fmtMin(endM);
+
+    const pop = document.createElement('div');
+    pop.className = 'cal-popup';
+    pop.id = 'cal-popup';
+    const h = document.createElement('h4');
+    const room = bookableRooms.find(r => r.zone_key === currentZone);
+    h.textContent = `Book ${room ? room.label : currentZone}`;
+    pop.appendChild(h);
+    const p1 = document.createElement('p');
+    p1.textContent = `${date} · ${startHM}–${endHM}`;
+    pop.appendChild(p1);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const ok = document.createElement('button');
+    ok.className = 'btn btn-sm btn-primary';
+    ok.textContent = 'Open booking form';
+    ok.addEventListener('click', () => {
+      const params = new URLSearchParams({
+        book: currentZone, date, start: startHM, end: endHM,
+      });
+      window.location.href = `/floor-plan/?${params.toString()}`;
+    });
+    const cancel = document.createElement('button');
+    cancel.className = 'btn btn-sm';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', closePopup);
+    actions.appendChild(ok); actions.appendChild(cancel);
+    pop.appendChild(actions);
+
+    pop.style.left = `${ev.clientX + window.scrollX + 6}px`;
+    pop.style.top = `${ev.clientY + window.scrollY + 6}px`;
+    document.body.appendChild(pop);
+    setTimeout(() => {
+      const off = (e) => {
+        if (!pop.contains(e.target)) { closePopup(); document.removeEventListener('click', off); }
+      };
+      document.addEventListener('click', off);
+    }, 0);
+  }
+
+  function closePopup() {
+    const p = document.getElementById('cal-popup');
+    if (p) p.remove();
+  }
+
+  init();
+})();
+</script>
+{% endblock %}

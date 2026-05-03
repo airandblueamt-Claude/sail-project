@@ -29,6 +29,17 @@ def index():
     return render_template("floor_plan/index.html")
 
 
+@floor_plan_bp.route("/calendar", methods=["GET"])
+def calendar_page():
+    """Weekly calendar view of bookings per room.
+
+    Visible to every authenticated user; the booking action redirects to
+    the floor plan with prefilled query params so the existing modal
+    handles the actual submit.
+    """
+    return render_template("floor_plan/calendar.html")
+
+
 @floor_plan_bp.route("/bookings", methods=["GET"])
 def bookings_page():
     """Bookings page — visible to every authenticated user.

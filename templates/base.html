@@ -40,6 +40,9 @@
             <li><a href="{{ url_for('floor_plan.index') }}" class="{% if request.endpoint == 'floor_plan.index' %}active{% endif %}">
                 <i data-lucide="map"></i> Floor plan
             </a></li>
+            <li><a href="{{ url_for('floor_plan.calendar_page') }}" class="{% if request.endpoint == 'floor_plan.calendar_page' %}active{% endif %}">
+                <i data-lucide="calendar-days"></i> Calendar
+            </a></li>
             <li><a href="{{ url_for('floor_plan.bookings_page') }}" class="{% if request.endpoint == 'floor_plan.bookings_page' %}active{% endif %}">
                 <i data-lucide="calendar-check"></i> My Bookings
             </a></li>

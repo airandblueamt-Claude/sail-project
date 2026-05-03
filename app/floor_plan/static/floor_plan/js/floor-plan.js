@@ -1663,5 +1663,30 @@ document.getElementById('iso-import-file').addEventListener('change', e => {
     });
   }
   renderPins();
-  loadBookableRooms();
+  await loadBookableRooms();
+
+  // If we arrived from the calendar page with ?book=zone&date=&start=&end=,
+  // auto-open the booking modal pre-filled for that slot.
+  const params = new URLSearchParams(window.location.search);
+  const bookZone = params.get('book');
+  if (bookZone && BOOKABLE.has(bookZone)) {
+    selectZone(bookZone);
+    await openBookingModal(bookZone);
+    const form = document.getElementById('fp-booking-form');
+    if (form) {
+      const d = params.get('date');
+      const s = params.get('start');
+      const e = params.get('end');
+      if (d) form.elements['date'].value = d;
+      const startSel = document.getElementById('fp-start-select');
+      const endSel = document.getElementById('fp-end-select');
+      if (s && startSel) {
+        startSel.value = s;
+        if (startSel.onchange) startSel.onchange();
+      }
+      if (e && endSel) endSel.value = e;
+      // Trigger schedule strip refresh for the chosen date
+      if (d && form.elements['date'].onchange) form.elements['date'].onchange();
+    }
+  }
 })();
