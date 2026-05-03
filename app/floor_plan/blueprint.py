@@ -166,18 +166,12 @@ def api_bookable_rooms():
     return jsonify([r.to_dict() for r in rooms])
 
 
-@floor_plan_bp.route("/api/rooms/<zone_key>/assets", methods=["GET"])
-def api_room_assets(zone_key):
-    """List assets in the physical location backing this bookable room.
+def _query_assets_at_location(location_id):
+    """Late-import wrapper around the sail.db assets-by-location query.
 
-    Crosses databases: `bookable_rooms` is in floor_plan.db (SQLAlchemy),
-    `assets` lives in sail.db (raw sqlite via database.get_db()).
+    The late `from database import get_db` is required so the test fixture's
+    monkeypatch on database.DB_PATH lands first.
     """
-    room = BookableRoom.query.filter_by(zone_key=zone_key, is_active=1).first()
-    if room is None:
-        abort(404, description=f"No bookable room for zone '{zone_key}'.")
-
-    # Late import so the test fixture's monkeypatch on database.DB_PATH lands first
     from database import get_db
     with get_db() as conn:
         rows = conn.execute(
@@ -189,10 +183,9 @@ def api_room_assets(zone_key):
             WHERE a.location_id = ?
             ORDER BY em.name, a.asset_tag
             """,
-            (room.sail_location_id,),
+            (location_id,),
         ).fetchall()
-
-    return jsonify([
+    return [
         {
             "id": r["id"],
             "asset_tag": r["asset_tag"],
@@ -202,7 +195,43 @@ def api_room_assets(zone_key):
             "brand": r["brand"],
         }
         for r in rows
-    ])
+    ]
+
+
+@floor_plan_bp.route("/api/rooms/<zone_key>/assets", methods=["GET"])
+def api_room_assets(zone_key):
+    """List assets in a *bookable* room (legacy shape: bare list, 404 if
+    the zone is not in bookable_rooms). Used by the booking modal.
+    """
+    room = BookableRoom.query.filter_by(zone_key=zone_key, is_active=1).first()
+    if room is None:
+        abort(404, description=f"No bookable room for zone '{zone_key}'.")
+    return jsonify(_query_assets_at_location(room.sail_location_id))
+
+
+@floor_plan_bp.route("/api/zones/<zone_key>/assets", methods=["GET"])
+def api_zone_assets(zone_key):
+    """List assets for any zone that has a sail.db location mapping —
+    bookable rooms plus the broader ZONE_TO_LOCATION map. Returns
+    `{assets, linked, zone_key}`; `linked` is False when the zone has no
+    mapping, so the side panel can render a calm empty state instead of
+    a 404.
+    """
+    from .zone_map import location_for
+    location_id = None
+    room = BookableRoom.query.filter_by(zone_key=zone_key, is_active=1).first()
+    if room is not None:
+        location_id = room.sail_location_id
+    else:
+        location_id = location_for(zone_key)
+
+    if location_id is None:
+        return jsonify({"assets": [], "linked": False, "zone_key": zone_key}), 200
+    return jsonify({
+        "assets": _query_assets_at_location(location_id),
+        "linked": True,
+        "zone_key": zone_key,
+    })
 
 
 @floor_plan_bp.route("/api/rooms/<zone_key>/bookings", methods=["GET"])

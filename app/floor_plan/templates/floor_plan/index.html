@@ -523,9 +523,14 @@
 
         <div class="section-title">
           <span>Assets &amp; Equipment</span>
-          <button class="add-asset" id="add-asset-btn">+ Add</button>
         </div>
-        <ul class="assets" id="d-assets"></ul>
+        {# Hardcoded asset list and edit-mode "+ Add" button removed —
+           inventory now comes from sail.db via /api/zones/<zone>/assets
+           and renders into #zone-detail-extra. The legacy add-asset-btn
+           and #d-assets <ul> are kept hidden for JS handlers that still
+           reference them. #}
+        <ul class="assets" id="d-assets" hidden></ul>
+        <button class="add-asset" id="add-asset-btn" hidden></button>
         <div id="zone-detail-extra"></div>
         <div id="zone-detail-actions"></div>
       </div>

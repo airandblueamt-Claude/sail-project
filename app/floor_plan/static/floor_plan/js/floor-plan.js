@@ -365,7 +365,9 @@ function showZone(key) {
     occWrap.style.display = 'none';
   }
 
-  renderAssets(z);
+  // Real inventory from sail.db (works for any zone with a location mapping;
+  // shows "No inventory linked" otherwise). Replaces the old hardcoded list.
+  renderRoomAssets(key);
 
   const room = BOOKABLE.get(key);
   const headerEl = document.getElementById('d-name');
@@ -376,10 +378,8 @@ function showZone(key) {
     badge.className = 'fp-bookable-badge';
     badge.textContent = 'Bookable';
     headerEl.insertAdjacentElement('afterend', badge);
-    renderRoomAssets(key);
     renderBookButton(key);
   } else {
-    clearRoomAssets();
     clearBookButton();
   }
 }
@@ -394,20 +394,27 @@ function _emptyAssetMessage(text) {
 async function renderRoomAssets(zoneKey) {
   const container = document.getElementById('zone-detail-extra');
   container.replaceChildren(_emptyAssetMessage('Loading assets…'));
-  let list;
+  let body;
   try {
-    const r = await fetch(`${API_BASE}/rooms/${encodeURIComponent(zoneKey)}/assets`);
+    const r = await fetch(`${API_BASE}/zones/${encodeURIComponent(zoneKey)}/assets`);
     if (!r.ok) {
-      container.replaceChildren(_emptyAssetMessage('No assets in this room.'));
+      container.replaceChildren(_emptyAssetMessage('Could not load assets.'));
       return;
     }
-    list = await r.json();
+    body = await r.json();
   } catch (e) {
     container.replaceChildren(_emptyAssetMessage('Could not load assets.'));
     return;
   }
+  if (!body.linked) {
+    container.replaceChildren(_emptyAssetMessage(
+      'No inventory linked to this zone yet — admin can configure.'));
+    return;
+  }
+  const list = body.assets || [];
   if (!list.length) {
-    container.replaceChildren(_emptyAssetMessage('No assets in this room.'));
+    container.replaceChildren(_emptyAssetMessage(
+      'No assets currently in this room.'));
     return;
   }
   const ul = document.createElement('ul');
