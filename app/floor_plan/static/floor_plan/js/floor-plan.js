@@ -544,9 +544,15 @@ async function openBookingModal(zoneKey) {
     }
   };
 
-  // Date-change refetch of pending count
-  form.elements['date'].onchange = () => loadPendingCount(zoneKey, form.elements['date'].value);
+  // Date-change refetch of pending count + day-schedule strip
+  const refreshForDate = () => {
+    const d = form.elements['date'].value;
+    loadPendingCount(zoneKey, d);
+    renderSchedule(zoneKey, d);
+  };
+  form.elements['date'].onchange = refreshForDate;
   loadPendingCount(zoneKey, today);
+  renderSchedule(zoneKey, today);
 
   // Equipment-catalog picker — user picks model + qty; ops allocates
   // specific assets at approval time.
@@ -554,6 +560,81 @@ async function openBookingModal(zoneKey) {
 
   modal.hidden = false;
 }
+
+function _slotMins(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+async function renderSchedule(zoneKey, date) {
+  const wrap = document.getElementById('fp-schedule');
+  const bar = document.getElementById('fp-schedule-bar');
+  const axis = document.getElementById('fp-schedule-axis');
+  if (!wrap || !bar || !axis) return;
+
+  let data;
+  try {
+    const r = await fetch(`${API_BASE}/rooms/${encodeURIComponent(zoneKey)}/schedule?date=${encodeURIComponent(date)}`);
+    if (!r.ok) { wrap.hidden = true; return; }
+    data = await r.json();
+  } catch (_) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+
+  const openMin = _slotMins(data.lab_open || '07:00');
+  const closeMin = _slotMins(data.lab_close || '16:00');
+  const slot = data.slot_minutes || 15;
+  const totalSlots = (closeMin - openMin) / slot;
+
+  // Build slot cells
+  bar.replaceChildren();
+  const startSel = document.getElementById('fp-start-select');
+  for (let i = 0; i < totalSlots; i++) {
+    const slotStart = openMin + i * slot;
+    const slotEnd = slotStart + slot;
+    const div = document.createElement('div');
+    div.className = 'fp-slot';
+    div.dataset.start = _formatSlot(slotStart);
+    div.dataset.end = _formatSlot(slotEnd);
+
+    // Mark busy if any booking overlaps this 15-min cell
+    const busyBooking = (data.bookings || []).find(b => {
+      const bs = _slotMins(b.start_time);
+      const be = _slotMins(b.end_time);
+      return slotStart < be && bs < slotEnd;
+    });
+    if (busyBooking) {
+      div.classList.add('busy');
+      div.title = `${busyBooking.ticket_number} · ${busyBooking.start_time}–${busyBooking.end_time}`
+        + (busyBooking.submitter_name ? ` · ${busyBooking.submitter_name}` : '')
+        + ` (${busyBooking.status})`;
+    } else {
+      div.title = `Click to start at ${_formatSlot(slotStart)}`;
+      div.addEventListener('click', () => {
+        // Set start_time to this slot, bump end if needed
+        if (startSel) {
+          startSel.value = div.dataset.start;
+          if (startSel.onchange) startSel.onchange();
+        }
+        // Visual selection feedback
+        bar.querySelectorAll('.fp-slot.selected').forEach(s => s.classList.remove('selected'));
+        div.classList.add('selected');
+      });
+    }
+    bar.appendChild(div);
+  }
+
+  // Axis labels — every hour
+  axis.replaceChildren();
+  for (let m = openMin; m <= closeMin; m += 60) {
+    const t = document.createElement('span');
+    t.textContent = _formatSlot(m);
+    axis.appendChild(t);
+  }
+}
+
 
 async function loadPendingCount(zoneKey, date) {
   const banner = document.getElementById('fp-pending-banner');

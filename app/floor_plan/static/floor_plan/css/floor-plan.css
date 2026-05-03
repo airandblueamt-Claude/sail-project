@@ -1111,6 +1111,43 @@
 }
 .fp-cart-summary.has-items { color: var(--accent); font-weight: 500; }
 
+/* Day-schedule strip in booking modal — visual free/booked at a glance */
+.fp-schedule { margin: 4px 0 14px 0; }
+.fp-schedule-label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--text-muted); margin-bottom: 4px;
+}
+.fp-schedule-legend { display: inline-flex; gap: 10px; font-size: 11px; }
+.fp-leg {
+  display: inline-block; width: 10px; height: 10px;
+  border-radius: 2px; vertical-align: middle; margin-right: 2px;
+}
+.fp-leg-free { background: var(--green); }
+.fp-leg-booked { background: var(--red); }
+.fp-schedule-bar {
+  position: relative; height: 28px; background: var(--green-bg);
+  border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  display: flex;
+}
+.fp-schedule-bar .fp-slot {
+  flex: 1 1 0; border-right: 1px solid rgba(0,0,0,0.04); cursor: pointer;
+  transition: background 0.1s ease;
+}
+.fp-schedule-bar .fp-slot:last-child { border-right: none; }
+.fp-schedule-bar .fp-slot:hover { background: rgba(34,197,94,0.30); }
+.fp-schedule-bar .fp-slot.busy {
+  background: rgba(239,68,68,0.55); cursor: not-allowed;
+}
+.fp-schedule-bar .fp-slot.busy:hover { background: rgba(239,68,68,0.55); }
+.fp-schedule-bar .fp-slot.selected {
+  background: rgba(79,110,247,0.65);
+}
+.fp-schedule-axis {
+  display: flex; justify-content: space-between;
+  font-size: 10px; font-family: ui-monospace, monospace;
+  color: var(--text-muted); margin-top: 3px; padding: 0 1px;
+}
+
 /* Equipment-catalog picker inside the booking modal */
 .fp-equip-row {
   display: grid;

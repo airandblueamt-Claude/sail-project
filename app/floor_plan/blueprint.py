@@ -322,6 +322,60 @@ def api_zone_assets(zone_key):
     })
 
 
+@floor_plan_bp.route("/api/rooms/<zone_key>/schedule", methods=["GET"])
+def api_room_schedule(zone_key):
+    """Return the booked time windows for a room on a given date so the
+    booking modal can render a visual day-strip of free vs busy slots.
+
+    Returns: {"date": ..., "lab_open": "07:00", "lab_close": "16:00",
+              "slot_minutes": 15,
+              "bookings": [{"ticket_number", "start_time", "end_time", "status",
+                            "submitter_name"}, ...]}
+    """
+    date = request.args.get("date", "")
+    if not date:
+        abort(400, description="date query param is required (YYYY-MM-DD).")
+
+    room = BookableRoom.query.filter_by(zone_key=zone_key, is_active=1).first()
+    if room is None:
+        abort(404, description=f"No bookable room for zone '{zone_key}'.")
+
+    from .booking import _parse_times_from_description, LAB_OPEN, LAB_CLOSE, SLOT_MINUTES
+    title = f"Booking request: {room.label} on {date}"
+    from database import get_db
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT t.ticket_number, t.description, t.status, e.name AS submitter_name
+               FROM tickets t
+               LEFT JOIN employees e ON e.id = t.submitted_by
+               WHERE t.title = ?
+                 AND t.type = 'new_request'
+                 AND t.status IN ('open', 'in_progress', 'waiting')
+               ORDER BY t.id""",
+            (title,),
+        ).fetchall()
+
+    bookings = []
+    for r in rows:
+        s, e = _parse_times_from_description(r["description"])
+        if s and e:
+            bookings.append({
+                "ticket_number": r["ticket_number"],
+                "start_time": s,
+                "end_time": e,
+                "status": r["status"],
+                "submitter_name": r["submitter_name"],
+            })
+
+    return jsonify({
+        "date": date,
+        "lab_open": LAB_OPEN.strftime("%H:%M"),
+        "lab_close": LAB_CLOSE.strftime("%H:%M"),
+        "slot_minutes": SLOT_MINUTES,
+        "bookings": bookings,
+    })
+
+
 @floor_plan_bp.route("/api/rooms/<zone_key>/bookings", methods=["GET"])
 def api_room_bookings(zone_key):
     """Count pending booking requests for a room on a given date.

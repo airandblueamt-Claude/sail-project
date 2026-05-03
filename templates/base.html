@@ -22,25 +22,32 @@
             </div>
             <span class="logo-sub">SAIL &mdash; Asset Inventory &amp; Logistics</span>
         </div>
+        {% set is_staff = current_user and current_user.role in ('admin', 'manager', 'technician') %}
         <ul class="nav-links">
+            {% if is_staff %}
             <li><a href="{{ url_for('dashboard.index') }}" class="{% if request.endpoint == 'dashboard.index' %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i> Dashboard
             </a></li>
+            {% endif %}
             <li><a href="{{ url_for('inventory.models') }}" class="{% if request.endpoint == 'inventory.models' %}active{% endif %}">
                 <i data-lucide="layout-grid"></i> Equipment Catalog
             </a></li>
+            {% if is_staff %}
             <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if request.endpoint == 'tickets.my_tickets' %}active{% endif %}">
                 <i data-lucide="ticket"></i> My Tickets
             </a></li>
+            {% endif %}
             <li><a href="{{ url_for('floor_plan.index') }}" class="{% if request.endpoint == 'floor_plan.index' %}active{% endif %}">
                 <i data-lucide="map"></i> Floor plan
             </a></li>
             <li><a href="{{ url_for('floor_plan.bookings_page') }}" class="{% if request.endpoint == 'floor_plan.bookings_page' %}active{% endif %}">
                 <i data-lucide="calendar-check"></i> My Bookings
             </a></li>
+            {% if is_staff %}
             <li><a href="{{ url_for('help.guide') }}" class="{% if request.blueprint == 'help' %}active{% endif %}">
                 <i data-lucide="help-circle"></i> How It Works
             </a></li>
+            {% endif %}
 
             {% if current_user and current_user.role in ('admin', 'manager', 'technician') %}
             <li class="nav-divider"><span>Administration</span></li>

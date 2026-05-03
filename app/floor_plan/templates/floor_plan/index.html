@@ -565,6 +565,21 @@
       <input type="hidden" name="zone_key">
 
       <label>Date <input name="date" type="date" required></label>
+
+      {# Day-strip: visual schedule of the selected room+date so the user
+         sees free vs booked slots at a glance and can click to set start. #}
+      <div class="fp-schedule" id="fp-schedule" hidden>
+        <div class="fp-schedule-label">
+          <span>Schedule for the day</span>
+          <span class="fp-schedule-legend">
+            <span class="fp-leg fp-leg-free"></span> free
+            <span class="fp-leg fp-leg-booked"></span> booked
+          </span>
+        </div>
+        <div class="fp-schedule-bar" id="fp-schedule-bar"></div>
+        <div class="fp-schedule-axis" id="fp-schedule-axis"></div>
+      </div>
+
       <div class="fp-row">
         <label>Start <select name="start_time" id="fp-start-select" required></select></label>
         <label>End <select name="end_time" id="fp-end-select" required></select></label>
