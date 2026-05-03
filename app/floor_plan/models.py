@@ -116,3 +116,43 @@ class BookableRoom(db.Model):
 
     def __repr__(self) -> str:
         return f"<BookableRoom {self.zone_key} -> loc {self.sail_location_id}>"
+
+
+class BookingReturn(db.Model):
+    """One row per asset returned at the close of a booking.
+
+    Booking tickets live in sail.db (cross-DB seam at ticket level), but the
+    return-verification metadata stays here in floor_plan.db. We denormalise
+    `asset_tag` and `model_name` so the audit stays readable even if the
+    asset row is later renumbered or deleted in sail.db.
+
+    `state` is enforced at the application layer (no SQLite ENUM); allowed
+    values are `returned_good`, `damaged`, `missing`.
+    """
+    __tablename__ = "booking_returns"
+
+    id = db.Column(db.Integer, primary_key=True)
+    booking_ticket_id = db.Column(db.Integer, nullable=False, index=True)
+    asset_id = db.Column(db.Integer, nullable=False)
+    asset_tag = db.Column(db.String(40), nullable=False)
+    model_name = db.Column(db.String(200), default="")
+    state = db.Column(db.String(20), nullable=False)
+    notes = db.Column(db.Text, default="")
+    verified_at = db.Column(db.DateTime, default=_now, nullable=False)
+    verified_by = db.Column(db.Integer, nullable=True)  # sail.db employees.id
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "booking_ticket_id": self.booking_ticket_id,
+            "asset_id": self.asset_id,
+            "asset_tag": self.asset_tag,
+            "model_name": self.model_name,
+            "state": self.state,
+            "notes": self.notes,
+            "verified_at": self.verified_at.isoformat() if self.verified_at else None,
+            "verified_by": self.verified_by,
+        }
+
+    def __repr__(self) -> str:
+        return f"<BookingReturn ticket={self.booking_ticket_id} asset={self.asset_tag} {self.state}>"
