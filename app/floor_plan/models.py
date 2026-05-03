@@ -85,3 +85,34 @@ class Pin(db.Model):
 
     def __repr__(self) -> str:
         return f"<Pin {self.id} {self.name!r} at ({self.x:.1f}, {self.y:.1f})>"
+
+
+class BookableRoom(db.Model):
+    """A room on the floor plan that users can request to book.
+
+    `zone_key` matches a key in the JS ZONES object on the plan view.
+    `sail_location_id` is a SOFT FK into sail.db locations(id) — SQLite cannot
+    enforce cross-database FKs, so the application layer guards reads.
+    """
+    __tablename__ = "bookable_rooms"
+
+    id = db.Column(db.Integer, primary_key=True)
+    zone_key = db.Column(db.String(80), nullable=False, unique=True)
+    sail_location_id = db.Column(db.Integer, nullable=False)
+    label = db.Column(db.String(120), nullable=False)
+    capacity = db.Column(db.Integer, nullable=True)
+    is_active = db.Column(db.Integer, default=1, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "zone_key": self.zone_key,
+            "sail_location_id": self.sail_location_id,
+            "label": self.label,
+            "capacity": self.capacity,
+            "is_active": bool(self.is_active),
+        }
+
+    def __repr__(self) -> str:
+        return f"<BookableRoom {self.zone_key} -> loc {self.sail_location_id}>"
