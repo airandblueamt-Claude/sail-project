@@ -7,7 +7,7 @@ from flask import (
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import db
-from .models import Pin
+from .models import Pin, BookableRoom
 
 
 floor_plan_bp = Blueprint(
@@ -138,6 +138,15 @@ def _validate_pin_dict(data: dict) -> None:
     for a in assets:
         if not (isinstance(a, list) and len(a) == 2):
             abort(400, description="Each asset must be a [name, count] pair.")
+
+
+# ---------- API: bookable rooms ----------
+
+@floor_plan_bp.route("/api/bookable-rooms", methods=["GET"])
+def api_bookable_rooms():
+    """List the rooms that can be booked from the plan view."""
+    rooms = BookableRoom.query.filter_by(is_active=1).order_by(BookableRoom.label).all()
+    return jsonify([r.to_dict() for r in rooms])
 
 
 # ---------- Healthcheck ----------
