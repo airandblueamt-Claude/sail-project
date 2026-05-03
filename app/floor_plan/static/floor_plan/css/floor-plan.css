@@ -1,44 +1,28 @@
-  /* Floor-plan styles are scoped under .fp-app so they don't bleed into
-     sail-project's sidebar or other pages. CSS variables live on .fp-app
-     (not :root) for the same reason. */
+  /* Floor-plan visuals are scoped under .fp-app and inherit sail-project's
+     design tokens (bg, text, border, radius). The schematic SVG plan keeps
+     its own brand red for the bookable accents and zone outlines. */
   .fp-app {
-    --bg: #f5f3ee;
-    --paper: #faf8f3;
-    --ink: #1a1a1a;
-    --ink-2: #4a4a4a;
-    --ink-3: #888;
-    --line: #1a1a1a;
-    --line-soft: rgba(26,26,26,0.25);
-    --line-faint: rgba(26,26,26,0.10);
+    /* Local aliases used throughout the schematic CSS, mapped to sail tokens */
+    --paper: var(--bg-card);
+    --ink: var(--text);
+    --ink-2: var(--text-muted);
+    --ink-3: var(--text-muted);
+    --line: var(--border);
+    --line-soft: var(--border);
+    --line-faint: var(--border);
     --accent: #c8362d;
     --accent-soft: rgba(200,54,45,0.08);
     --accent-fill: rgba(200,54,45,0.14);
     --hover-fill: rgba(80,120,180,0.10);
     --hover-stroke: #4a7bc8;
-    --good: #2d8a4f;
-    --warn: #d68f1f;
-    --bad: #c8362d;
-    --shadow: 0 1px 0 rgba(26,26,26,0.04), 0 8px 24px rgba(26,26,26,0.06);
+    --good: var(--green);
+    --warn: var(--yellow);
+    --bad: var(--red);
 
-    background: var(--bg);
-    color: var(--ink);
-    font-family: 'Inter Tight', system-ui, sans-serif;
-    min-height: 100vh;
-    transition: background 0.25s ease, color 0.25s ease;
-    background-image:
-      linear-gradient(var(--line-faint) 1px, transparent 1px),
-      linear-gradient(90deg, var(--line-faint) 1px, transparent 1px);
-    background-size: 32px 32px;
+    color: var(--text);
+    font-family: inherit;
   }
   [data-theme="dark"] .fp-app {
-    --bg: #14161b;
-    --paper: #1c1f26;
-    --ink: #e8e6df;
-    --ink-2: #a8a6a0;
-    --ink-3: #6c6a64;
-    --line: #4a4d56;
-    --line-soft: rgba(232,230,223,0.22);
-    --line-faint: rgba(232,230,223,0.10);
     --accent: #ff6b5b;
     --accent-soft: rgba(255,107,91,0.10);
     --accent-fill: rgba(255,107,91,0.18);
@@ -46,55 +30,12 @@
     --hover-stroke: #78aae6;
   }
 
-  .fp-app * { box-sizing: border-box; margin: 0; padding: 0; }
+  .fp-app * { box-sizing: border-box; }
 
-  .page { max-width: 1500px; margin: 0 auto; padding: 24px; }
+  .fp-app .page { max-width: 100%; margin: 0; padding: 0; }
 
-  /* HEADER */
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 18px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--line);
-  }
-  .brand {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-  }
-  .brand h1 {
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.5px;
-  }
-  .brand .sub {
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--ink-3);
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-  }
-  .header-actions {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-  .icon-btn {
-    background: transparent;
-    border: 1px solid var(--line);
-    color: var(--ink);
-    width: 34px; height: 34px;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    transition: all 0.15s ease;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14px;
-  }
-  .icon-btn:hover { background: var(--line-faint); }
-  .icon-btn.on { background: var(--ink); color: var(--paper); }
+  /* (Old floor-plan header / brand / icon-btn styles removed —
+     sail's .page-header + .btn classes are used instead.) */
 
   /* STATS DASHBOARD */
   .dashboard {

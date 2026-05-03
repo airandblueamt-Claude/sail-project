@@ -9,21 +9,23 @@
 {% block content %}
 
 <div class="fp-app" id="app">
-  <div class="page">
 
-  <header>
-    <div class="brand">
-      <h1>Incubation Floor Plan</h1>
-      <span class="sub">// v2.0 · Interactive site survey</span>
+  <div class="page-header">
+    <div>
+      <h2>Floor plan</h2>
+      <p class="breadcrumb">SAIL Incubation lab — interactive layout and room booking</p>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="theme-toggle" title="Toggle theme">◐</button>
-      <button class="icon-btn" id="edit-toggle" title="Edit mode">✎</button>
-      <button class="icon-btn" id="export-btn" title="Export JSON">↓</button>
-      <button class="icon-btn" id="import-btn" title="Import JSON">↑</button>
+      <button class="btn btn-sm" id="edit-toggle" title="Edit mode"><i data-lucide="edit-3"></i> Edit</button>
+      <button class="btn btn-sm" id="export-btn" title="Export pins as JSON"><i data-lucide="download"></i> Export</button>
+      <button class="btn btn-sm" id="import-btn" title="Import pins from JSON"><i data-lucide="upload"></i> Import</button>
       <input type="file" id="import-file" accept="application/json" style="display:none" />
+      {# theme-toggle kept hidden for JS compatibility — sail's sidebar handles theme #}
+      <button id="theme-toggle" style="display:none" aria-hidden="true"></button>
     </div>
-  </header>
+  </div>
+
+  <div class="page">
 
   <!-- DASHBOARD -->
   <div class="dashboard" id="dashboard"></div>
