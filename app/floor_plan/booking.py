@@ -222,7 +222,7 @@ def _check_equipment_capacity(conn, requested_models, date_str, start_time, end_
             f"""SELECT a.equipment_model_id, COUNT(*) AS n
                 FROM assets a
                 WHERE a.equipment_model_id IN ({placeholders})
-                  AND a.status NOT IN ('decommissioned', 'missing')
+                  AND a.status != 'missing'
                 GROUP BY a.equipment_model_id""",
             model_ids,
         ).fetchall()
@@ -494,7 +494,7 @@ def approve_booking(ticket_id):
         )
 
         # Assign every requested asset to the submitter for the duration of
-        # the booking: status -> checked_out, assigned_to -> submitted_by.
+        # the booking: status -> assigned, assigned_to -> submitted_by.
         # Each transition is audited so the history shows when the asset
         # moved into / out of the user's hands.
         assigned = []
@@ -503,7 +503,7 @@ def approve_booking(ticket_id):
         asset_tags = _parse_assets_from_description(row["description"])
         # Path 2: new equipment_request shape (model_id + quantity).
         # Auto-allocate the first N available assets per model that are
-        # not already checked_out by another booking. Ops can change the
+        # not already assigned to another booking. Ops can change the
         # picks later via a manual reassign flow if needed.
         equipment_requests = _parse_equipment_requests_from_description(row["description"])
         for er in equipment_requests:
@@ -525,15 +525,15 @@ def approve_booking(ticket_id):
                 asset_tags,
             ).fetchall()
             for a in asset_rows:
-                if a["status"] != "checked_out":
+                if a["status"] != "assigned":
                     conn.execute(
-                        "UPDATE assets SET status='checked_out', updated_at=datetime('now') WHERE id = ?",
+                        "UPDATE assets SET status='assigned', updated_at=datetime('now') WHERE id = ?",
                         (a["id"],),
                     )
                     log_audit(
                         conn, "assets", a["id"], "update",
                         field_name="status",
-                        old_value=a["status"], new_value="checked_out",
+                        old_value=a["status"], new_value="assigned",
                         changed_by=actor_id,
                     )
                 if a["assigned_to"] != row["submitted_by"]:

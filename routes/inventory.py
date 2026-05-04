@@ -353,8 +353,7 @@ def manage_assets():
                            total_assets=total_assets,
                            categories=categories,
                            locations=locations,
-                           statuses=('available', 'in_use', 'reserved', 'checked_out',
-                                     'maintenance', 'decommissioned', 'missing'),
+                           statuses=('available', 'assigned', 'reserved', 'missing'),
                            conditions=('good', 'fair', 'damaged', 'decommissioned'),
                            q=q, f_status=f_status, f_condition=f_condition,
                            f_category=f_category, f_location=f_location,
@@ -415,8 +414,7 @@ def edit_asset(asset_id):
 
     # Keep in sync with the assets.status / assets.condition CHECK constraints
     # in schema.sql — drift fails inserts silently-looking but fatally.
-    STATUS_VALUES = ('available', 'in_use', 'reserved', 'checked_out',
-                     'maintenance', 'decommissioned', 'missing')
+    STATUS_VALUES = ('available', 'assigned', 'reserved', 'missing')
     CONDITION_VALUES = ('good', 'fair', 'damaged', 'decommissioned')
 
     with get_db() as conn:

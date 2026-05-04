@@ -91,8 +91,7 @@ CREATE TABLE IF NOT EXISTS assets (
     condition           TEXT DEFAULT 'good'
                         CHECK(condition IN ('good','fair','damaged','decommissioned')),
     status              TEXT DEFAULT 'available'
-                        CHECK(status IN ('available','in_use','reserved','checked_out',
-                                         'maintenance','decommissioned','missing')),
+                        CHECK(status IN ('available','assigned','reserved','missing')),
     assigned_to         INTEGER REFERENCES employees(id),
     qty_represented     INTEGER DEFAULT 1,
     purchase_date       TEXT,

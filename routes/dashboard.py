@@ -42,27 +42,27 @@ def index():
             LIMIT 5
         """).fetchall()
 
-        # Unhealthy assets (in maintenance or damaged).
+        # Unhealthy assets (missing or damaged).
         stats['unhealthy_assets'] = conn.execute("""
             SELECT a.id, a.asset_tag, a.status, a.condition,
                    em.name AS model_name, l.label, l.code
             FROM assets a
             JOIN equipment_models em ON a.equipment_model_id = em.id
             LEFT JOIN locations l ON a.location_id = l.id
-            WHERE a.status = 'maintenance' OR a.condition = 'damaged'
+            WHERE a.status = 'missing' OR a.condition = 'damaged'
             ORDER BY a.asset_tag
             LIMIT 20
         """).fetchall()
 
-        # Asset counts (totals + in-use vs available).
+        # Asset counts (totals + assigned vs available).
         counts = conn.execute("""
             SELECT
                 SUM(CASE WHEN status='available' THEN 1 ELSE 0 END) AS available,
-                SUM(CASE WHEN status='in_use'    THEN 1 ELSE 0 END) AS in_use,
+                SUM(CASE WHEN status='assigned'  THEN 1 ELSE 0 END) AS assigned,
                 COUNT(*) AS total
             FROM assets
         """).fetchone()
-        stats['asset_counts'] = dict(counts) if counts else {'available': 0, 'in_use': 0, 'total': 0}
+        stats['asset_counts'] = dict(counts) if counts else {'available': 0, 'assigned': 0, 'total': 0}
 
         # SMTP configured? (Same check email_service.send_email uses.)
         stats['smtp_configured'] = bool(

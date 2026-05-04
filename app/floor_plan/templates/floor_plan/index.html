@@ -17,9 +17,6 @@
     </div>
     <div class="header-actions">
       <button class="btn btn-sm" id="edit-toggle" title="Edit mode"><i data-lucide="edit-3"></i> Edit</button>
-      <button class="btn btn-sm" id="export-btn" title="Export pins as JSON"><i data-lucide="download"></i> Export</button>
-      <button class="btn btn-sm" id="import-btn" title="Import pins from JSON"><i data-lucide="upload"></i> Import</button>
-      <input type="file" id="import-file" accept="application/json" style="display:none" />
       {# theme-toggle kept hidden for JS compatibility — sail's sidebar handles theme #}
       <button id="theme-toggle" style="display:none" aria-hidden="true"></button>
     </div>
@@ -429,9 +426,6 @@
           <span class="iso-toolbar-label">Authoring</span>
           <button id="iso-add-btn">+ Add label</button>
           <button id="iso-clear-btn">Clear all</button>
-          <button id="iso-export-btn">↓ Export pins</button>
-          <button id="iso-import-btn">↑ Import pins</button>
-          <input type="file" id="iso-import-file" accept="application/json" style="display:none" />
           <span class="pin-count" id="iso-pin-count">0 pins</span>
         </div>
 

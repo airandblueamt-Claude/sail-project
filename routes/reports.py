@@ -80,10 +80,10 @@ def inventory():
             'models': conn.execute("SELECT COUNT(*) FROM equipment_models").fetchone()[0],
             'available': conn.execute(
                 "SELECT COUNT(*) FROM assets WHERE status='available'").fetchone()[0],
-            'checked_out': conn.execute(
-                "SELECT COUNT(*) FROM assets WHERE status='checked_out'").fetchone()[0],
-            'maintenance': conn.execute(
-                "SELECT COUNT(*) FROM assets WHERE status='maintenance'").fetchone()[0],
+            'assigned': conn.execute(
+                "SELECT COUNT(*) FROM assets WHERE status='assigned'").fetchone()[0],
+            'missing': conn.execute(
+                "SELECT COUNT(*) FROM assets WHERE status='missing'").fetchone()[0],
         }
 
         # History within period
@@ -277,6 +277,126 @@ EXPORT_TABLES = [
     'equipment_models', 'assets',
     'tickets', 'ticket_comments', 'audit_log',
 ]
+
+# ── Booking report ────────────────────────────────────────────────────
+
+@reports_bp.route('/bookings')
+def bookings():
+    guard = _admin_only()
+    if guard:
+        return guard
+
+    from app.floor_plan.booking import (
+        _parse_booking_title, _parse_times_from_description,
+        _parse_assets_from_description, _parse_assigned_assets_from_description,
+    )
+
+    f_status = (request.args.get('status') or 'all').lower()
+    f_room = (request.args.get('room') or '').strip()
+    f_from = (request.args.get('from') or '').strip()
+    f_to = (request.args.get('to') or '').strip()
+    fmt = request.args.get('format', '')
+
+    sql = (
+        "SELECT t.id, t.ticket_number, t.title, t.description, t.status, "
+        "       t.created_at, t.closed_at, "
+        "       e.name AS submitter_name, e.email AS submitter_email "
+        "FROM tickets t "
+        "LEFT JOIN employees e ON e.id = t.submitted_by "
+        "WHERE t.title LIKE 'Booking request:%'"
+    )
+    params = []
+    if f_status in ('open', 'in_progress', 'closed'):
+        sql += " AND t.status = ?"
+        params.append(f_status)
+    if f_from:
+        sql += " AND date(t.created_at) >= ?"
+        params.append(f_from)
+    if f_to:
+        sql += " AND date(t.created_at) <= ?"
+        params.append(f_to)
+    sql += " ORDER BY t.id DESC"
+
+    with get_db() as conn:
+        rows = conn.execute(sql, params).fetchall()
+
+        all_tags = set()
+        parsed_tags = []
+        for r in rows:
+            assigned = _parse_assigned_assets_from_description(r['description'])
+            tags = assigned or _parse_assets_from_description(r['description'])
+            parsed_tags.append(tags)
+            all_tags.update(tags)
+        tag_to_asset = {}
+        if all_tags:
+            placeholders = ",".join('?' * len(all_tags))
+            for ar in conn.execute(
+                f"""SELECT a.asset_tag, em.name AS model_name
+                    FROM assets a JOIN equipment_models em ON em.id = a.equipment_model_id
+                    WHERE a.asset_tag IN ({placeholders})""",
+                tuple(all_tags),
+            ).fetchall():
+                tag_to_asset[ar['asset_tag']] = ar['model_name']
+
+    bookings_list = []
+    rooms_seen = set()
+    for r, tags in zip(rows, parsed_tags):
+        room_label, date_str = _parse_booking_title(r['title'])
+        start_time, end_time = _parse_times_from_description(r['description'])
+        if room_label:
+            rooms_seen.add(room_label)
+        if f_room and room_label != f_room:
+            continue
+        bookings_list.append({
+            'id': r['id'],
+            'ticket_number': r['ticket_number'],
+            'status': r['status'],
+            'room_label': room_label or '',
+            'date': date_str or '',
+            'start_time': start_time or '',
+            'end_time': end_time or '',
+            'submitter_name': r['submitter_name'] or '',
+            'submitter_email': r['submitter_email'] or '',
+            'created_at': (r['created_at'] or '')[:16].replace('T', ' '),
+            'closed_at': (r['closed_at'] or '')[:16].replace('T', ' ') if r['closed_at'] else '',
+            'assets': [
+                {'tag': tag, 'model': tag_to_asset.get(tag, '')} for tag in tags
+            ],
+        })
+
+    totals = {
+        'total': len(bookings_list),
+        'open': sum(1 for b in bookings_list if b['status'] == 'open'),
+        'in_progress': sum(1 for b in bookings_list if b['status'] == 'in_progress'),
+        'closed': sum(1 for b in bookings_list if b['status'] == 'closed'),
+    }
+
+    by_room = {}
+    for b in bookings_list:
+        by_room[b['room_label'] or '(unknown)'] = by_room.get(b['room_label'] or '(unknown)', 0) + 1
+    by_room = sorted(by_room.items(), key=lambda kv: kv[1], reverse=True)
+
+    if fmt == 'csv':
+        rows_out = [['Ticket', 'Room', 'Date', 'Start', 'End', 'Requester',
+                     'Email', 'Status', 'Created', 'Closed', 'Assets']]
+        for b in bookings_list:
+            rows_out.append([
+                b['ticket_number'], b['room_label'], b['date'],
+                b['start_time'], b['end_time'], b['submitter_name'],
+                b['submitter_email'], b['status'], b['created_at'], b['closed_at'],
+                '; '.join(f"{a['tag']} ({a['model']})" if a['model'] else a['tag']
+                          for a in b['assets']),
+            ])
+        return _csv_response('bookings.csv', rows_out[0], rows_out[1:])
+
+    return render_template('reports/bookings.html',
+                           bookings=bookings_list,
+                           totals=totals,
+                           by_room=by_room,
+                           rooms=sorted(rooms_seen),
+                           f_status=f_status, f_room=f_room,
+                           f_from=f_from, f_to=f_to)
+
 
 HEADER_FONT = Font(bold=True, color='FFFFFF')
 HEADER_FILL = PatternFill('solid', fgColor='2D3748')

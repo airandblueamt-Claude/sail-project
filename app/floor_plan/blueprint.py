@@ -225,8 +225,8 @@ def api_equipment_catalog():
     (Dell Monitor, PC, etc.) plus a quantity; the ops team picks the
     specific physical assets to assign at approval time.
 
-    Excludes decommissioned and missing assets from the count — those
-    are not available for booking.
+    Excludes missing assets from the count — those are not available
+    for booking.
     """
     from database import get_db
     with get_db() as conn:
@@ -237,7 +237,7 @@ def api_equipment_catalog():
                FROM equipment_models em
                LEFT JOIN categories c ON c.id = em.category_id
                LEFT JOIN assets a ON a.equipment_model_id = em.id
-                                  AND a.status NOT IN ('decommissioned', 'missing')
+                                  AND a.status != 'missing'
                GROUP BY em.id, em.name, em.brand, c.name
                HAVING total_count > 0
                ORDER BY em.name, em.brand""",

@@ -60,7 +60,7 @@ Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comm
 
 - `employees.role`: `admin` / `manager` / `technician` / `employee`
 - `assets.condition`: `good` / `fair` / `damaged` / `decommissioned`
-- `assets.status`: `available` / `in_use` / `reserved` / `checked_out` / `maintenance` / `decommissioned`
+- `assets.status`: `available` / `assigned` / `reserved` / `missing`
 - `tickets.type`: `maintenance` / `move` / `new_request` / `incident` / `decommission` / `other`
 - `tickets.priority`: `low` / `medium` / `high` / `critical`
 - `tickets.status`: `open` / `in_progress` / `waiting` / `resolved` / `closed`

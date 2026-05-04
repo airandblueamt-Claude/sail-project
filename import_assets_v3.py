@@ -131,19 +131,19 @@ def derive_status(holder, remark):
     """
     Derived per the §6 rules in the spec:
       - Remark = Not Found/Missing  -> missing
-      - Holder = NOT SAIL           -> decommissioned
+      - Holder = NOT SAIL           -> missing
       - Holder in storage-pool      -> available
-      - Otherwise                   -> in_use
+      - Otherwise                   -> assigned
     The 'Found Not in App' remark falls through to the holder rules.
     """
     if remark and remark.strip().lower() == "not found/missing":
         return "missing"
     h = (holder or "").strip()
     if h.upper() == "NOT SAIL":
-        return "decommissioned"
+        return "missing"
     if not h or h in STORAGE_POOL_HOLDERS:
         return "available"
-    return "in_use"
+    return "assigned"
 
 
 def location_code(label):
@@ -348,8 +348,7 @@ def print_summary(plan):
     print(f"  Locations:         {len(locs)}")
     print(f"  Equipment models:  {len(models)}")
     print(f"  Assets:            {len(assets)}")
-    for st in ("available", "in_use", "missing", "decommissioned",
-               "reserved", "checked_out", "maintenance"):
+    for st in ("available", "assigned", "reserved", "missing"):
         if sc.get(st):
             print(f"    {st + ':':<16} {sc[st]}")
     print("DATA QUALITY")

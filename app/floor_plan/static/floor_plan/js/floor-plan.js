@@ -1084,36 +1084,6 @@ document.getElementById('add-asset-btn').addEventListener('click', () => {
   toast('Asset added');
 });
 
-// Export / Import
-document.getElementById('export-btn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(ZONES, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'incubation-floor-data.json';
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('Exported JSON');
-});
-document.getElementById('import-btn').addEventListener('click', () =>
-  document.getElementById('import-file').click());
-document.getElementById('import-file').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      ZONES = JSON.parse(ev.target.result);
-      renderDashboard();
-      if (activeKey && ZONES[activeKey]) showZone(activeKey);
-      toast('Imported successfully');
-    } catch (err) {
-      toast('Invalid JSON file');
-    }
-  };
-  reader.readAsText(file);
-});
-
 // Toast
 let toastTimer;
 function toast(msg) {
@@ -1610,46 +1580,6 @@ document.getElementById('iso-clear-btn').addEventListener('click', () => {
   document.getElementById('empty').style.display = 'block';
   document.getElementById('content').style.display = 'none';
   toast('All pins cleared');
-});
-
-document.getElementById('iso-export-btn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(SAIL_PINS, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'sail-pins.json';
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('Pins exported');
-});
-
-document.getElementById('iso-import-btn').addEventListener('click', () => {
-  document.getElementById('iso-import-file').click();
-});
-document.getElementById('iso-import-file').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const parsed = JSON.parse(ev.target.result);
-      if (!Array.isArray(parsed)) throw new Error('Not an array');
-      SAIL_PINS = parsed;
-      // Keep next-id ahead of any imported P-XX
-      isoNextId = 1;
-      parsed.forEach(p => {
-        const m = String(p.id || '').match(/P-(\d+)/);
-        if (m) isoNextId = Math.max(isoNextId, parseInt(m[1]) + 1);
-      });
-      saveAuto();
-      renderPins();
-      toast(`Imported ${parsed.length} pins`);
-    } catch (err) {
-      toast('Invalid pins file');
-    }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
 });
 
 // === Init: load any saved pins (async — server first, local fallback) ===

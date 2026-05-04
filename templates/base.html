@@ -69,6 +69,9 @@
             <li><a href="{{ url_for('reports.tickets') }}" class="{% if request.endpoint == 'reports.tickets' %}active{% endif %}">
                 <i data-lucide="activity"></i> Ticket Report
             </a></li>
+            <li><a href="{{ url_for('reports.bookings') }}" class="{% if request.endpoint == 'reports.bookings' %}active{% endif %}">
+                <i data-lucide="calendar-check"></i> Booking Report
+            </a></li>
             <li><a href="{{ url_for('employees.list_employees') }}" class="{% if request.blueprint == 'employees' %}active{% endif %}">
                 <i data-lucide="users"></i> Employees
             </a></li>

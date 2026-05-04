@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Booking Report{% endblock %}
+{% block extra_head %}
+<style>
+.bk-rep-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 18px; }
+.bk-rep-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.bk-rep-filters input, .bk-rep-filters select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; }
+.bk-rep-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.bk-rep-table th, .bk-rep-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+.bk-rep-table th { font-weight: 500; color: var(--text-muted); background: var(--bg); font-size: 12px; }
+.bk-rep-table tr:last-child td { border-bottom: none; }
+.bk-rep-table .num { text-align: right; }
+.bk-rep-chip { display: inline-block; padding: 1px 7px; margin: 1px 3px 1px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); }
+.bk-rep-status { display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 500; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+.bk-rep-status.open { background: var(--yellow-bg); color: var(--yellow); }
+.bk-rep-status.in_progress { background: var(--accent-light); color: var(--accent); }
+.bk-rep-status.closed { background: var(--green-bg); color: var(--green); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Booking Report</h2>
+    <div class="page-header-actions">
+        <a href="{{ url_for('reports.inventory') }}" class="btn btn-sm"><i data-lucide="package"></i> Inventory</a>
+        <a href="{{ url_for('reports.tickets') }}" class="btn btn-sm"><i data-lucide="ticket"></i> Tickets</a>
+        <a href="{{ url_for('reports.bookings', status=f_status, room=f_room, **{'from': f_from, 'to': f_to, 'format': 'csv'}) }}" class="btn btn-sm btn-green"><i data-lucide="download"></i> CSV</a>
+    </div>
+</div>
+
+<form class="bk-rep-filters" method="get">
+    <label>From<input type="date" name="from" value="{{ f_from }}"></label>
+    <label>To<input type="date" name="to" value="{{ f_to }}"></label>
+    <label>Status
+        <select name="status">
+            <option value="all" {% if f_status == 'all' %}selected{% endif %}>All</option>
+            <option value="open" {% if f_status == 'open' %}selected{% endif %}>Open</option>
+            <option value="in_progress" {% if f_status == 'in_progress' %}selected{% endif %}>In progress</option>
+            <option value="closed" {% if f_status == 'closed' %}selected{% endif %}>Closed</option>
+        </select>
+    </label>
+    <label>Room
+        <select name="room">
+            <option value="">All rooms</option>
+            {% for r in rooms %}
+            <option value="{{ r }}" {% if f_room == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+    {% if f_status != 'all' or f_room or f_from or f_to %}
+    <a href="{{ url_for('reports.bookings') }}" class="btn btn-sm">Reset</a>
+    {% endif %}
+</form>
+
+<div class="section">
+    <h3>Current Snapshot</h3>
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i data-lucide="calendar"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.total }}</span><span class="stat-label">Total bookings</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon yellow"><i data-lucide="hourglass"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.open }}</span><span class="stat-label">Awaiting review</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon orange"><i data-lucide="check-circle-2"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.in_progress }}</span><span class="stat-label">Approved (in progress)</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i data-lucide="archive"></i></div>
+            <div class="stat-body"><span class="stat-value">{{ totals.closed }}</span><span class="stat-label">Closed</span></div>
+        </div>
+    </div>
+</div>
+
+{% if by_room %}
+<div class="section">
+    <h3>By Room</h3>
+    <table class="data-table">
+        <thead><tr><th>Room</th><th class="num">Bookings</th></tr></thead>
+        <tbody>
+            {% for room, n in by_room %}
+            <tr><td>{{ room }}</td><td class="num">{{ n }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="section">
+    <h3>All Bookings</h3>
+    {% if bookings %}
+    <table class="bk-rep-table">
+        <thead>
+            <tr>
+                <th>Ticket</th><th>Room</th><th>When</th><th>Requester</th>
+                <th>Assets</th><th>Status</th><th>Created</th><th>Closed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in bookings %}
+            <tr>
+                <td style="font-family: ui-monospace, monospace; font-size: 12px;">{{ b.ticket_number }}</td>
+                <td>{{ b.room_label or '—' }}</td>
+                <td>{{ b.date }} · {{ b.start_time }}–{{ b.end_time }}</td>
+                <td>
+                    {{ b.submitter_name }}
+                    {% if b.submitter_email %}<br><span style="color: var(--text-muted); font-size: 11px;">{{ b.submitter_email }}</span>{% endif %}
+                </td>
+                <td>
+                    {% if b.assets %}
+                        {% for a in b.assets %}<span class="bk-rep-chip" title="{{ a.model }}">{{ a.tag }}</span>{% endfor %}
+                    {% else %}
+                        <span style="color: var(--text-muted);">—</span>
+                    {% endif %}
+                </td>
+                <td><span class="bk-rep-status {{ b.status }}">{{ b.status|replace('_',' ') }}</span></td>
+                <td style="color: var(--text-muted);">{{ b.created_at }}</td>
+                <td style="color: var(--text-muted);">{{ b.closed_at or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="bk-empty" style="padding: 32px; text-align: center; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">No bookings match the current filters.</div>
+    {% endif %}
+</div>
+{% endblock %}

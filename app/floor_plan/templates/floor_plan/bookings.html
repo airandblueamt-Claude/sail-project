@@ -47,6 +47,18 @@
 .bk-return-row .notes input { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font: inherit; background: var(--bg); color: var(--text); }
 .bk-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .bk-error { background: var(--red-bg); color: var(--red); padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+
+/* Review modal */
+.bk-review dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0 0 18px 0; }
+.bk-review dt { color: var(--text-muted); font-size: 13px; }
+.bk-review dd { margin: 0; font-size: 14px; }
+.bk-review .assets-list { display: flex; flex-direction: column; gap: 6px; }
+.bk-review .asset-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.bk-review .asset-row .a-tag { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-muted); margin-right: 12px; }
+.bk-review .asset-row .a-name { font-size: 13px; }
+.bk-review .asset-row .a-status { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); }
+.bk-review .empty-assets { padding: 12px; color: var(--text-muted); font-size: 13px; background: var(--bg); border: 1px dashed var(--border); border-radius: 6px; text-align: center; }
+.bk-review h3 { font-size: 13px; color: var(--text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
 </style>
 {% endblock %}
 {% block content %}
@@ -70,6 +82,23 @@
 </div>
 
 <div id="bk-content"></div>
+
+<!-- Review-and-approve modal -->
+<div id="bk-review-modal" class="bk-modal" hidden>
+  <div class="bk-modal-bg" data-close></div>
+  <div class="bk-modal-card bk-review" role="dialog" aria-labelledby="bk-review-title">
+    <h2 id="bk-review-title">Review booking request</h2>
+    <p class="sub" id="bk-review-sub"></p>
+    <div id="bk-review-error" class="bk-error" hidden></div>
+    <dl id="bk-review-dl"></dl>
+    <h3>Requested assets</h3>
+    <div id="bk-review-assets" class="assets-list"></div>
+    <div class="bk-modal-footer">
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="button" class="btn btn-primary" id="bk-review-approve">Approve booking</button>
+    </div>
+  </div>
+</div>
 
 <!-- Close-and-verify modal -->
 <div id="bk-close-modal" class="bk-modal" hidden>
@@ -239,18 +268,84 @@
     return tr;
   }
 
-  async function approve(b) {
-    if (!confirm(`Approve booking ${b.ticket_number} for ${b.room_label}?`)) return;
-    try {
-      const r = await fetch(`/floor-plan/api/bookings/${b.id}/approve`, { method: 'POST' });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({error: 'Failed'}));
-        alert(err.error || 'Approve failed');
-        return;
-      }
-      load();
-    } catch (e) { alert('Network error.'); }
+  function approve(b) {
+    openReviewModal(b);
   }
+
+  function openReviewModal(b) {
+    const modal = document.getElementById('bk-review-modal');
+    const sub = document.getElementById('bk-review-sub');
+    const dl = document.getElementById('bk-review-dl');
+    const assetsBox = document.getElementById('bk-review-assets');
+    const err = document.getElementById('bk-review-error');
+    const okBtn = document.getElementById('bk-review-approve');
+    err.hidden = true; err.textContent = '';
+
+    sub.textContent = `${b.ticket_number} · submitted ${(b.created_at || '').slice(0, 16).replace('T', ' ')}`;
+
+    const facts = [
+      ['Room',      b.room_label || '—'],
+      ['Date',      b.date || '—'],
+      ['Time',      `${b.start_time || '?'} – ${b.end_time || '?'}`],
+      ['Requester', (b.submitter && b.submitter.name) || '—'],
+      ['Email',     (b.submitter && b.submitter.email) || '—'],
+    ];
+    dl.replaceChildren(...facts.flatMap(([k, v]) => {
+      const dt = document.createElement('dt'); dt.textContent = k;
+      const dd = document.createElement('dd'); dd.textContent = v;
+      return [dt, dd];
+    }));
+
+    if (!b.assets || !b.assets.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-assets';
+      empty.textContent = 'The requester did not specify any assets.';
+      assetsBox.replaceChildren(empty);
+    } else {
+      assetsBox.replaceChildren(...b.assets.map(a => {
+        const row = document.createElement('div');
+        row.className = 'asset-row';
+        const left = document.createElement('div');
+        const tag = document.createElement('span'); tag.className = 'a-tag'; tag.textContent = a.asset_tag;
+        const name = document.createElement('span'); name.className = 'a-name'; name.textContent = a.model_name || '';
+        left.appendChild(tag); left.appendChild(name);
+        const stat = document.createElement('span');
+        stat.className = 'a-status';
+        stat.textContent = (a.status || '').replace('_', ' ') || '—';
+        row.appendChild(left); row.appendChild(stat);
+        return row;
+      }));
+    }
+
+    okBtn.onclick = async () => {
+      okBtn.disabled = true;
+      try {
+        const r = await fetch(`/floor-plan/api/bookings/${b.id}/approve`, { method: 'POST' });
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({error: 'Approve failed'}));
+          err.textContent = e.error || 'Approve failed';
+          err.hidden = false;
+          okBtn.disabled = false;
+          return;
+        }
+        closeReviewModal();
+        load();
+      } catch (e) {
+        err.textContent = 'Network error.';
+        err.hidden = false;
+        okBtn.disabled = false;
+      }
+    };
+
+    modal.hidden = false;
+  }
+
+  function closeReviewModal() {
+    document.getElementById('bk-review-modal').hidden = true;
+  }
+  document.querySelectorAll('#bk-review-modal [data-close]').forEach(el => {
+    el.addEventListener('click', closeReviewModal);
+  });
 
   function openCloseModal(b) {
     const modal = document.getElementById('bk-close-modal');
