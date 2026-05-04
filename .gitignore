@@ -2,7 +2,10 @@ __pycache__/
 *.pyc
 *.pyo
 sail.db
+sail.log
 backups/
+.venv/
+instance/
 static/uploads/*
 !static/uploads/.gitkeep
 *.xlsx
