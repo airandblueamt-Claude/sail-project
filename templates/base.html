@@ -21,6 +21,13 @@
                 <img src="{{ url_for('static', filename='amt-logo.png') }}" alt="AMT" class="logo-img">
             </div>
             <span class="logo-sub">SAIL &mdash; Asset Inventory &amp; Logistics</span>
+            <button type="button" class="palette-trigger"
+                    title="Quick search (Ctrl+K / ⌘K)"
+                    onclick="document.dispatchEvent(new KeyboardEvent('keydown',{key:'k',ctrlKey:true}))">
+                <i data-lucide="search"></i>
+                <span>Search</span>
+                <kbd>⌘K</kbd>
+            </button>
         </div>
         {% set is_staff = current_user and current_user.role in ('admin', 'manager', 'technician') %}
         {#
@@ -221,5 +228,6 @@
             });
         })();
     </script>
+    <script src="{{ url_for('static', filename='palette.js') }}" defer></script>
 </body>
 </html>

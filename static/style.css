@@ -442,6 +442,147 @@ select.input { cursor: pointer; }
     box-shadow: 0 1px 0 var(--border);
 }
 
+/* ── Cmd+K trigger (sidebar header) ─────────────────────────────────────── */
+.palette-trigger {
+    margin-top: 12px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,.06);
+    color: var(--text-sidebar);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .82rem;
+    transition: background .15s, border-color .15s;
+}
+.palette-trigger:hover {
+    background: rgba(255,255,255,.1);
+    border-color: rgba(255,255,255,.12);
+    color: #fff;
+}
+.palette-trigger svg { width: 14px; height: 14px; opacity: .7; }
+.palette-trigger span { flex: 1; text-align: left; }
+.palette-trigger kbd {
+    font-family: inherit;
+    font-size: .72rem;
+    padding: 2px 5px;
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 3px;
+    background: rgba(0,0,0,.2);
+    opacity: .85;
+}
+
+/* ── Cmd+K command palette ─────────────────────────────────────────────── */
+.palette-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .45);
+    backdrop-filter: blur(2px);
+    z-index: 2000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12vh;
+}
+.palette-overlay[hidden] { display: none; }
+.palette-modal {
+    width: 100%;
+    max-width: 600px;
+    background: var(--bg-card, #fff);
+    color: var(--text);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 70vh;
+}
+.palette-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+}
+.palette-input-icon { font-size: 1.1rem; color: var(--text-muted); }
+.palette-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: 1rem;
+    color: var(--text);
+}
+.palette-results {
+    list-style: none;
+    margin: 0;
+    padding: 6px 0;
+    overflow-y: auto;
+    flex: 1;
+}
+.palette-result {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+}
+.palette-result.active {
+    background: rgba(120, 140, 180, .12);
+    border-left-color: var(--accent, #4a8eff);
+}
+.palette-result-icon {
+    width: 16px; height: 16px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.palette-result-main { flex: 1; min-width: 0; }
+.palette-result-label {
+    font-size: .92rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.palette-result-sub {
+    font-size: .78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.palette-result-kind {
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-muted);
+    background: rgba(120, 140, 180, .1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.palette-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: .9rem;
+    list-style: none;
+}
+.palette-hint {
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    font-size: .72rem;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: flex-end;
+}
+
 /* ── Empty states ───────────────────────────────────────────────────────── */
 /* A neutral, centered block for "no data yet" messages. Includes optional
    icon (rendered via <i data-lucide=""> in the template), heading, copy,

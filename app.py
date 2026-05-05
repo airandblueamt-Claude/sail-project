@@ -88,6 +88,137 @@ def create_app():
         session.clear()
         return redirect(url_for('login'))
 
+    # ── Cmd+K palette index ─────────────────────────────────────────
+    # Returns a flat search index — pages, assets, tickets, GPU assets,
+    # GPU requests, equipment models, employees — that the client-side
+    # palette filters on each keypress. Loaded once per session on
+    # first open. Auth via the standard before_request gate.
+    @app.route('/api/palette')
+    def palette_index():
+        from flask import jsonify
+        if not g.user:
+            return jsonify(items=[]), 401
+        items = []
+
+        # Static pages — cheap to enumerate, useful as quick jumps.
+        is_staff = g.user['role'] in ('admin', 'manager', 'technician')
+        pages = [
+            ('Dashboard',          url_for('dashboard.index'),         'layout-dashboard', is_staff),
+            ('Equipment Catalog',  url_for('inventory.models'),        'layout-grid',      True),
+            ('My Tickets',         url_for('tickets.my_tickets'),      'ticket',           is_staff),
+            ('Floor plan',         url_for('floor_plan.index'),        'map',              True),
+            ('Calendar',           url_for('floor_plan.calendar_page'),'calendar-days',    True),
+            ('My Bookings',        url_for('floor_plan.bookings_page'),'calendar-check',   True),
+            ('All Tickets',        url_for('tickets.list_tickets'),    'list-checks',      is_staff),
+            ('New ticket',         url_for('tickets.new_ticket'),      'plus-circle',      True),
+            ('Full Inventory',     url_for('inventory.all_models'),    'package',          is_staff),
+            ('Manage Assets',      url_for('inventory.manage_assets'), 'hard-drive',       is_staff),
+            ('Inventory Report',   url_for('reports.inventory'),       'bar-chart-3',      is_staff),
+            ('Ticket Report',      url_for('reports.tickets'),         'activity',         is_staff),
+            ('Booking Report',     url_for('reports.bookings'),        'calendar-check',   is_staff),
+            ('GPU Inventory',      url_for('gpu.inventory'),           'cpu',              is_staff),
+            ('GPU Requests',       url_for('gpu.request_list'),        'inbox',            is_staff),
+            ('New GPU request',   url_for('gpu.request_new'),         'plus-circle',      True),
+            ('Employees',          url_for('employees.list_employees'),'users',            is_staff),
+            ('Issue Categories',   url_for('issue_categories.index'),  'tags',             is_staff),
+            ('How It Works',       url_for('help.guide'),              'help-circle',      is_staff),
+            ('Change password',    url_for('change_password'),         'key',              True),
+        ]
+        for label, url, icon, visible in pages:
+            if visible:
+                items.append({'label': label, 'subtitle': '',
+                              'url': url, 'kind': 'Page', 'icon': icon})
+
+        # Records — only pull what users are likely to jump to.
+        with get_db() as conn:
+            for r in conn.execute("""
+                SELECT a.id, a.asset_tag, em.name AS model_name
+                FROM assets a
+                JOIN equipment_models em ON a.equipment_model_id = em.id
+                ORDER BY a.asset_tag
+            """).fetchall():
+                items.append({
+                    'label': r['asset_tag'],
+                    'subtitle': r['model_name'] or '',
+                    'url': url_for('inventory.asset_detail', asset_id=r['id']),
+                    'kind': 'Asset', 'icon': 'hard-drive',
+                })
+
+            for r in conn.execute("""
+                SELECT id, ticket_number, title, status
+                FROM tickets
+                WHERE title NOT LIKE 'Booking request:%'
+                ORDER BY id DESC
+            """).fetchall():
+                items.append({
+                    'label': r['ticket_number'],
+                    'subtitle': f"{r['title']} · {r['status']}",
+                    'url': url_for('tickets.ticket_detail', ticket_id=r['id']),
+                    'kind': 'Ticket', 'icon': 'ticket',
+                })
+
+            for r in conn.execute("""
+                SELECT asset_tag, kind, model, xcc_ip, vram_gb
+                FROM gpu_assets ORDER BY asset_tag
+            """).fetchall():
+                if r['kind'] == 'host':
+                    sub = f"{r['model'] or 'host'}"
+                    if r['xcc_ip']:
+                        sub += f" · {r['xcc_ip']}"
+                    icon = 'server'
+                else:
+                    sub = f"{r['model'] or 'GPU'}"
+                    if r['vram_gb']:
+                        sub += f" · {r['vram_gb']} GB"
+                    icon = 'cpu'
+                items.append({
+                    'label': r['asset_tag'],
+                    'subtitle': sub,
+                    'url': url_for('gpu.inventory_detail', asset_tag=r['asset_tag']),
+                    'kind': 'GPU' if r['kind'] == 'gpu' else 'Host',
+                    'icon': icon,
+                })
+
+            for r in conn.execute("""
+                SELECT request_number, title, decided_at
+                FROM gpu_requests ORDER BY id DESC
+            """).fetchall():
+                state = 'decided' if r['decided_at'] else 'open'
+                items.append({
+                    'label': r['request_number'],
+                    'subtitle': f"{r['title']} · {state}",
+                    'url': url_for('gpu.request_detail', number=r['request_number']),
+                    'kind': 'Request', 'icon': 'inbox',
+                })
+
+            for r in conn.execute("""
+                SELECT em.id, em.name, em.brand, c.name AS category
+                FROM equipment_models em
+                JOIN categories c ON em.category_id = c.id
+                ORDER BY em.name
+            """).fetchall():
+                sub = r['brand'] or r['category'] or ''
+                items.append({
+                    'label': r['name'],
+                    'subtitle': sub,
+                    'url': url_for('inventory.model_detail', model_id=r['id']),
+                    'kind': 'Equipment', 'icon': 'box',
+                })
+
+            if is_staff:
+                for r in conn.execute("""
+                    SELECT name, role, email FROM employees
+                    WHERE is_active = 1 ORDER BY name
+                """).fetchall():
+                    items.append({
+                        'label': r['name'],
+                        'subtitle': f"{r['role']} · {r['email'] or ''}",
+                        'url': url_for('employees.list_employees'),
+                        'kind': 'Person', 'icon': 'user',
+                    })
+
+        return jsonify(items=items)
+
     # ── Password change (self-service) ──────────────────────────────
     @app.route('/account/password', methods=['GET', 'POST'])
     def change_password():
