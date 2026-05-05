@@ -370,7 +370,55 @@ select.input { cursor: pointer; }
     color: var(--text-muted);
 }
 
-/* ── Flash messages ──────────────────────────────────────────────────────── */
+/* ── Toast notifications (replaces top-of-page flash banner) ─────────────── */
+.toast-stack {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 360px;
+    pointer-events: none;       /* let clicks pass except on the toasts */
+}
+.toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    font-size: .88rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 20px rgba(0,0,0,.15);
+    pointer-events: auto;        /* clickable */
+    animation: toast-in .22s ease-out;
+}
+.toast-success { border-left: 3px solid var(--green); }
+.toast-error,
+.toast-danger  { border-left: 3px solid var(--red);   }
+.toast-info    { border-left: 3px solid var(--accent, #4a8eff); }
+.toast-warning { border-left: 3px solid var(--yellow, #d39e00); }
+.toast-body { flex: 1; line-height: 1.35; color: var(--text); }
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    margin-left: 4px;
+}
+.toast-close:hover { color: var(--text); }
+.toast-leaving { opacity: 0; transform: translateX(20px); transition: opacity .25s, transform .25s; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Backwards compat: the few places that still emit .flash inside a page body. */
 .flash-messages { margin-bottom: 16px; }
 .flash {
     padding: 10px 16px;
@@ -380,6 +428,45 @@ select.input { cursor: pointer; }
 }
 .flash-success { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
 .flash-error { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
+
+/* ── Sticky table headers ───────────────────────────────────────────────── */
+/* Every .data-table that appears in a long list view gets a sticky header
+   so column meaning never scrolls out of view. Works for full-page scroll
+   (the default everywhere in the app); inside an inner scroll container
+   the th still sticks because the table inherits. */
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card, #fff);
+    z-index: 2;
+    box-shadow: 0 1px 0 var(--border);
+}
+
+/* ── Empty states ───────────────────────────────────────────────────────── */
+/* A neutral, centered block for "no data yet" messages. Includes optional
+   icon (rendered via <i data-lucide=""> in the template), heading, copy,
+   and a primary CTA button. */
+.empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-muted);
+}
+.empty-state-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+}
+.empty-state-icon svg { width: 24px; height: 24px; }
+.empty-state h3 { margin: 0 0 6px; color: var(--text); font-size: 1.05rem; }
+.empty-state p { margin: 0 0 16px; max-width: 380px; margin-left: auto; margin-right: auto; }
+.empty-state .btn { margin-top: 4px; }
 
 /* ── Comments ────────────────────────────────────────────────────────────── */
 .comment {

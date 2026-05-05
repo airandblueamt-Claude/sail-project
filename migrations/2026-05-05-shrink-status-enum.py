@@ -95,6 +95,12 @@ def main():
 
         # SQLite ALTER TABLE can't change a CHECK; canonical pattern is
         # rename -> create -> copy with CASE mapping -> drop -> rebuild indexes.
+        # IMPORTANT: legacy_alter_table = ON prevents SQLite (>= 3.26) from
+        # silently rewriting foreign-key references in OTHER tables to point
+        # to the renamed `assets_old` (and then dangling once we DROP it).
+        # Without this, tickets.asset_id and asset_custom_values.asset_id
+        # end up referencing a non-existent assets_old table.
+        conn.execute("PRAGMA legacy_alter_table = ON")
         conn.execute("BEGIN")
         conn.execute("ALTER TABLE assets RENAME TO assets_old")
         with open(os.path.join(ROOT, "schema.sql"), encoding="utf-8") as f:
@@ -136,7 +142,16 @@ def main():
 
         conn.execute("DROP TABLE assets_old")
         conn.execute("COMMIT")
+        conn.execute("PRAGMA legacy_alter_table = OFF")
         conn.execute("PRAGMA foreign_keys = ON")
+        # Sanity: any FK that still points at the absent assets_old?
+        bad = conn.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND sql LIKE '%assets_old%'"
+        ).fetchall()
+        if bad:
+            print(f"WARNING: tables still reference assets_old: {[r[0] for r in bad]}")
+            print("  Run a fix-up to recreate them with the correct FK.")
 
         post = assets_check_clause(conn)
         print(f"New assets.status values: {post}")

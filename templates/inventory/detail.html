@@ -66,22 +66,24 @@
             <tr>
                 <td><a href="{{ url_for('inventory.asset_detail', asset_id=a.id) }}"><strong>{{ a.asset_tag }}</strong></a></td>
                 <td>{{ a.serial_number or '—' }}</td>
-                <td><span class="badge badge-status-{{ a.status }}">{{ a.status|replace('_',' ') }}</span></td>
+                <td><span class="badge badge-status-{{ a.status }}">{{ a.status | pretty }}</span></td>
                 <td>{{ a.location_code or '—' }}{% if a.location_label and a.location_label != a.location_code %} ({{ a.location_label }}){% endif %}</td>
                 <td>{{ a.assigned_to_name or a.holder_name or '—' }}</td>
-                <td><span class="badge badge-{{ a.condition }}">{{ a.condition }}</span></td>
+                <td><span class="badge badge-{{ a.condition }}">{{ a.condition | pretty }}</span></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     {% else %}
     <div class="empty-state">
-        <i data-lucide="package-open"></i>
+        <span class="empty-state-icon"><i data-lucide="package-open"></i></span>
         {% if current_user.role in ('admin', 'manager', 'technician') %}
-        <p>No assets registered yet for this model.</p>
-        <a href="{{ url_for('inventory.register_asset', model_id=model.id) }}" class="btn btn-primary" style="margin-top:12px">Register First Asset</a>
+        <h3>No assets registered yet for this model.</h3>
+        <p>Click below to register the first physical unit.</p>
+        <a href="{{ url_for('inventory.register_asset', model_id=model.id) }}" class="btn btn-primary">+ Register first asset</a>
         {% else %}
-        <p>No assets available yet. Contact an admin to register equipment.</p>
+        <h3>No assets available yet.</h3>
+        <p>Contact an admin to register equipment.</p>
         {% endif %}
     </div>
     <script>lucide.createIcons();</script>

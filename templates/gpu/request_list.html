@@ -51,7 +51,7 @@
             <td class="num">{{ r.requested_hours or '—' }}</td>
             <td>
                 {% if r.decided_at %}
-                    <span class="badge">{{ r.decision or 'decided' }}</span>
+                    <span class="badge">{{ (r.decision or 'decided') | pretty }}</span>
                 {% else %}
                     <span class="badge badge-status-open">open</span>
                 {% endif %}
@@ -59,8 +59,13 @@
             <td>{{ r.created_at[:10] if r.created_at else '' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
-            No requests yet. Use "+ New request" to submit one.
+        <tr><td colspan="7" style="padding:0">
+            <div class="empty-state">
+                <span class="empty-state-icon"><i data-lucide="inbox"></i></span>
+                <h3>No requests yet.</h3>
+                <p>Submit an allocation request to track it through review and decision.</p>
+                <a href="{{ url_for('gpu.request_new') }}" class="btn btn-primary">+ New request</a>
+            </div>
         </td></tr>
         {% endfor %}
     </tbody>

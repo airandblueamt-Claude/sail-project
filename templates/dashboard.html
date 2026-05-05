@@ -68,7 +68,7 @@
                     <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.ticket_number }}</a></td>
                     <td>{{ t.title }}</td>
                     <td>{{ t.asset_tag or '—' }}</td>
-                    <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority }}</span></td>
+                    <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority | pretty }}</span></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -112,8 +112,8 @@
                 <td><a href="{{ url_for('inventory.asset_detail', asset_id=a.id) }}">{{ a.asset_tag }}</a></td>
                 <td>{{ a.model_name }}</td>
                 <td>{{ a.label or a.code or '—' }}</td>
-                <td><span class="badge">{{ a.status }}</span></td>
-                <td>{{ a.condition }}</td>
+                <td><span class="badge badge-status-{{ a.status }}">{{ a.status | pretty }}</span></td>
+                <td>{{ a.condition | pretty }}</td>
             </tr>
             {% endfor %}
         </tbody>

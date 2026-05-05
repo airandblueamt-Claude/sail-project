@@ -38,13 +38,13 @@
         {% for t in tickets %}
         <tr>
             <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}"><strong>{{ t.ticket_number }}</strong></a></td>
-            <td><span class="badge badge-type-{{ t.type }}">{{ t.type }}</span></td>
-            <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority }}</span></td>
+            <td><span class="badge badge-type-{{ t.type }}">{{ t.type | pretty }}</span></td>
+            <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority | pretty }}</span></td>
             <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.title }}</a></td>
             <td>{% if t.asset_tag %}{{ t.asset_tag }}{% else %}-{% endif %}</td>
             <td>{{ t.submitter_name }}</td>
             <td>{{ t.assignee_name or 'Unassigned' }}</td>
-            <td><span class="badge badge-status-{{ t.status }}">{{ t.status }}</span></td>
+            <td><span class="badge badge-status-{{ t.status }}">{{ t.status | pretty }}</span></td>
             <td>{{ t.created_at[:10] }}</td>
         </tr>
         {% endfor %}
@@ -52,8 +52,10 @@
 </table>
 {% else %}
 <div class="empty-state">
-    <i data-lucide="check-circle"></i>
-    <p>No tickets{% if status %} with status "{{ status }}"{% endif %}{% if ttype %} of type "{{ ttype }}"{% endif %}.</p>
+    <span class="empty-state-icon"><i data-lucide="check-circle"></i></span>
+    <h3>No tickets{% if status %} with status "{{ status | pretty }}"{% endif %}{% if ttype %} of type "{{ ttype | pretty }}"{% endif %}.</h3>
+    <p>Either nothing has been filed yet, or your filters narrowed everything out.</p>
+    <a href="{{ url_for('tickets.new_ticket') }}" class="btn btn-primary">+ New ticket</a>
 </div>
 <script>lucide.createIcons();</script>
 {% endif %}

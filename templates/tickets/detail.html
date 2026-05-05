@@ -12,9 +12,9 @@
     <div class="detail-card">
         <h4>Ticket Info</h4>
         <dl class="detail-list">
-            <dt>Type</dt><dd><span class="badge badge-type-{{ ticket.type }}">{{ ticket.type }}</span></dd>
-            <dt>Priority</dt><dd><span class="badge badge-priority-{{ ticket.priority }}">{{ ticket.priority }}</span></dd>
-            <dt>Status</dt><dd><span class="badge badge-status-{{ ticket.status }}">{{ ticket.status }}</span></dd>
+            <dt>Type</dt><dd><span class="badge badge-type-{{ ticket.type }}">{{ ticket.type | pretty }}</span></dd>
+            <dt>Priority</dt><dd><span class="badge badge-priority-{{ ticket.priority }}">{{ ticket.priority | pretty }}</span></dd>
+            <dt>Status</dt><dd><span class="badge badge-status-{{ ticket.status }}">{{ ticket.status | pretty }}</span></dd>
             <dt>Submitted By</dt><dd>{{ ticket.submitter_name }}</dd>
             <dt>Issue Category</dt><dd>{% if ticket.category_name %}{{ ticket.category_name }}{% else %}—{% endif %}</dd>
             <dt>Affected User</dt>
@@ -55,7 +55,7 @@
                 <label>Status</label>
                 <select name="status" class="input">
                     {% for s in ['open','in_progress','waiting','resolved','closed'] %}
-                    <option value="{{ s }}" {% if ticket.status == s %}selected{% endif %}>{{ s }}</option>
+                    <option value="{{ s }}" {% if ticket.status == s %}selected{% endif %}>{{ s | pretty }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -63,7 +63,7 @@
                 <label>Priority</label>
                 <select name="priority" class="input">
                     {% for p in ['low','medium','high','critical'] %}
-                    <option value="{{ p }}" {% if ticket.priority == p %}selected{% endif %}>{{ p }}</option>
+                    <option value="{{ p }}" {% if ticket.priority == p %}selected{% endif %}>{{ p | pretty }}</option>
                     {% endfor %}
                 </select>
             </div>

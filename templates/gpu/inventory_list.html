@@ -70,8 +70,12 @@
                 {{ asset_row(c, true) }}
             {% endfor %}
         {% else %}
-            <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
-                No GPU inventory loaded yet.
+            <tr><td colspan="7" style="padding:0">
+                <div class="empty-state">
+                    <span class="empty-state-icon"><i data-lucide="cpu"></i></span>
+                    <h3>No GPU inventory loaded yet.</h3>
+                    <p>Run the seed migration to populate the 16 hosts and 30 GPUs.</p>
+                </div>
             </td></tr>
         {% endfor %}
         {% if orphans %}

@@ -26,8 +26,8 @@
         <tr><th>Model</th><td>{{ asset.model_name }}{% if asset.model_number %} ({{ asset.model_number }}){% endif %}</td></tr>
         <tr><th>Category</th><td>{{ asset.category_name or '—' }}</td></tr>
         <tr><th>Location</th><td>{{ asset.location_name or '—' }}</td></tr>
-        <tr><th>Status</th><td><span class="badge">{{ asset.status }}</span></td></tr>
-        <tr><th>Condition</th><td>{{ asset.condition }}</td></tr>
+        <tr><th>Status</th><td><span class="badge badge-status-{{ asset.status }}">{{ asset.status | pretty }}</span></td></tr>
+        <tr><th>Condition</th><td><span class="badge badge-{{ asset.condition }}">{{ asset.condition | pretty }}</span></td></tr>
         <tr><th>Serial</th><td>{{ asset.serial_number or '—' }}</td></tr>
         <tr><th>Holder</th><td>{{ asset.holder_name or '—' }}</td></tr>
         {% if asset.notes %}<tr><th>Notes</th><td>{{ asset.notes }}</td></tr>{% endif %}
@@ -61,8 +61,8 @@
                 <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.ticket_number }}</a></td>
                 <td>{{ t.created_at[:10] }}</td>
                 <td>{{ t.category_name or '—' }}</td>
-                <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority }}</span></td>
-                <td><span class="badge">{{ t.status }}</span></td>
+                <td><span class="badge badge-priority-{{ t.priority }}">{{ t.priority | pretty }}</span></td>
+                <td><span class="badge badge-status-{{ t.status }}">{{ t.status | pretty }}</span></td>
                 <td>{{ t.title }}</td>
                 <td>{{ t.submitter_name or '—' }}</td>
                 <td>{{ t.resolved_at[:10] if t.resolved_at else '—' }}</td>

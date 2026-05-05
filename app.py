@@ -11,6 +11,22 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+    # ── Jinja filter: humanise enum values ───────────────────────────
+    # Used everywhere a status/priority/condition/category/decision is
+    # rendered. snake_case becomes Sentence case ("in_progress" ->
+    # "In progress"); values that already have uppercase letters
+    # (e.g. "Cloud / HCI", "Head") are left as-is.
+    @app.template_filter('pretty')
+    def pretty_filter(value):
+        if value is None:
+            return ''
+        s = str(value).strip()
+        if not s:
+            return ''
+        if any(c.isupper() for c in s):
+            return s
+        return s.replace('_', ' ').capitalize()
+
     # ── Auth: load user on every request ─────────────────────────────
     @app.before_request
     def load_user():

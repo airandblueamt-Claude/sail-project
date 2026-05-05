@@ -29,7 +29,7 @@
         <select name="status" class="input">
             <option value="">All</option>
             {% for s in statuses %}
-            <option value="{{ s }}" {% if f_status == s %}selected{% endif %}>{{ s|replace('_',' ')|title }}</option>
+            <option value="{{ s }}" {% if f_status == s %}selected{% endif %}>{{ s | pretty }}</option>
             {% endfor %}
         </select>
     </div>
@@ -38,7 +38,7 @@
         <select name="condition" class="input">
             <option value="">All</option>
             {% for c in conditions %}
-            <option value="{{ c }}" {% if f_condition == c %}selected{% endif %}>{{ c|title }}</option>
+            <option value="{{ c }}" {% if f_condition == c %}selected{% endif %}>{{ c | pretty }}</option>
             {% endfor %}
         </select>
     </div>
@@ -95,10 +95,10 @@
             <td>{{ a.model_number or '—' }}</td>
             <td><span class="badge badge-cat">{{ a.category_name }}</span></td>
             <td>{{ a.serial_number or '—' }}</td>
-            <td><span class="badge badge-status-{{ a.status }}">{{ a.status|replace('_',' ') }}</span></td>
+            <td><span class="badge badge-status-{{ a.status }}">{{ a.status | pretty }}</span></td>
             <td>{{ a.location_code or '—' }}</td>
             <td>{{ a.assigned_to_name or a.holder_name or '—' }}</td>
-            <td><span class="badge badge-{{ a.condition }}">{{ a.condition }}</span></td>
+            <td><span class="badge badge-{{ a.condition }}">{{ a.condition | pretty }}</span></td>
             {% for f in custom_fields %}
             <td>{{ cf_values.get(a.id, {}).get(f.id, '') or '—' }}</td>
             {% endfor %}
@@ -109,15 +109,15 @@
 </div>
 {% else %}
 <div class="empty-state">
-    <i data-lucide="hard-drive"></i>
+    <span class="empty-state-icon"><i data-lucide="hard-drive"></i></span>
     {% if q or f_status or f_condition or f_category or f_location %}
-        <p>No assets match your search.</p>
-        <p class="muted">Try clearing some filters.</p>
-        <a href="{{ url_for('inventory.manage_assets') }}" class="btn btn-ghost" style="margin-top:12px">Clear filters</a>
+        <h3>No assets match your search.</h3>
+        <p>Try clearing some filters.</p>
+        <a href="{{ url_for('inventory.manage_assets') }}" class="btn btn-ghost">Clear filters</a>
     {% else %}
-        <p>No individual assets registered yet.</p>
-        <p class="muted">Go to an equipment model and click "Register Asset" to add physical units.</p>
-        <a href="{{ url_for('inventory.models') }}" class="btn btn-primary" style="margin-top:12px">Browse Equipment Models</a>
+        <h3>No individual assets registered yet.</h3>
+        <p>Go to an equipment model and click "Register Asset" to add physical units.</p>
+        <a href="{{ url_for('inventory.models') }}" class="btn btn-primary">Browse equipment models</a>
     {% endif %}
 </div>
 <script>lucide.createIcons();</script>

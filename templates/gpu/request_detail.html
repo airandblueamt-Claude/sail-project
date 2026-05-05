@@ -8,7 +8,7 @@
     </div>
     <div class="page-actions">
         {% if request_.decided_at %}
-            <span class="badge">{{ request_.decision or 'decided' }}</span>
+            <span class="badge">{{ (request_.decision or 'decided') | pretty }}</span>
         {% else %}
             <span class="badge badge-status-open">open</span>
         {% endif %}
@@ -34,7 +34,7 @@
     <div class="detail-card">
         <h4>Requester</h4>
         <dl class="detail-list">
-            <dt>Type</dt><dd>{{ request_.requester_type }}</dd>
+            <dt>Type</dt><dd>{{ request_.requester_type | pretty }}</dd>
             <dt>Name</dt><dd>{{ request_.requester_name_resolved or request_.requester_name or '—' }}</dd>
             <dt>Email</dt>
             <dd>
@@ -123,7 +123,7 @@
     <h4>Response</h4>
     {% if request_.decided_at %}
         <dl class="detail-list">
-            <dt>Decision</dt><dd>{{ request_.decision or '—' }}</dd>
+            <dt>Decision</dt><dd>{{ request_.decision | pretty if request_.decision else '—' }}</dd>
             <dt>Decided by</dt><dd>{{ request_.decided_by_name or '—' }} on {{ request_.decided_at[:16] }}</dd>
             <dt>Fit notes</dt><dd>{{ request_.fit_notes or '—' }}</dd>
             <dt>Allocated assets</dt><dd>{{ request_.allocated_asset_tags or '—' }}</dd>

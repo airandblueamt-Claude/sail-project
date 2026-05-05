@@ -178,18 +178,23 @@
     </nav>
 
     <main class="content">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        <div class="flash-messages">
-            {% for category, message in messages %}
-            <div class="flash flash-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        {% endwith %}
-
         {% block content %}{% endblock %}
     </main>
+
+    {# Toasts replace the old flash banner. Render server-side; auto-dismiss
+       below. Each gets a category-driven left border. #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="toast-stack" aria-live="polite" aria-atomic="false">
+        {% for category, message in messages %}
+        <div class="toast toast-{{ category }}" role="status">
+            <div class="toast-body">{{ message }}</div>
+            <button type="button" class="toast-close" aria-label="Dismiss">&times;</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
 
     <script>
         lucide.createIcons();
@@ -199,6 +204,22 @@
             html.setAttribute('data-theme', next);
             localStorage.setItem('sail-theme', next);
         }
+        // Toast dismiss: click X or auto after 5 s. Errors persist (10 s)
+        // because users genuinely need to read them.
+        (function() {
+            const toasts = document.querySelectorAll('.toast');
+            toasts.forEach(t => {
+                const isError = t.classList.contains('toast-error') || t.classList.contains('toast-danger');
+                const ttl = isError ? 10000 : 5000;
+                const dismiss = () => {
+                    if (!t.parentNode) return;
+                    t.classList.add('toast-leaving');
+                    setTimeout(() => t.parentNode && t.parentNode.removeChild(t), 260);
+                };
+                t.querySelector('.toast-close').addEventListener('click', dismiss);
+                setTimeout(dismiss, ttl);
+            });
+        })();
     </script>
 </body>
 </html>
