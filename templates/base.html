@@ -23,69 +23,138 @@
             <span class="logo-sub">SAIL &mdash; Asset Inventory &amp; Logistics</span>
         </div>
         {% set is_staff = current_user and current_user.role in ('admin', 'manager', 'technician') %}
+        {#
+          Sidebar is structured as flat top-level links + collapsible groups.
+          Each <details> auto-opens when the current page lives inside it,
+          using `open` driven by request.blueprint / request.endpoint.
+        #}
+        {% set ep = request.endpoint or '' %}
+        {% set bp = request.blueprint or '' %}
         <ul class="nav-links">
             {% if is_staff %}
-            <li><a href="{{ url_for('dashboard.index') }}" class="{% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+            <li><a href="{{ url_for('dashboard.index') }}" class="{% if ep == 'dashboard.index' %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i> Dashboard
             </a></li>
             {% endif %}
-            <li><a href="{{ url_for('inventory.models') }}" class="{% if request.endpoint == 'inventory.models' %}active{% endif %}">
+
+            <li><a href="{{ url_for('inventory.models') }}" class="{% if ep == 'inventory.models' %}active{% endif %}">
                 <i data-lucide="layout-grid"></i> Equipment Catalog
             </a></li>
+
+            {# ── Floor plan group (3 items collapsed under one) ─────────── #}
+            <li class="nav-group">
+                <details {% if bp == 'floor_plan' %}open{% endif %}>
+                    <summary>
+                        <span><i data-lucide="map"></i> Floor plan</span>
+                        <i data-lucide="chevron-down" class="nav-chevron"></i>
+                    </summary>
+                    <ul>
+                        <li><a href="{{ url_for('floor_plan.index') }}" class="{% if ep == 'floor_plan.index' %}active{% endif %}">
+                            <i data-lucide="map-pin"></i> Map
+                        </a></li>
+                        <li><a href="{{ url_for('floor_plan.calendar_page') }}" class="{% if ep == 'floor_plan.calendar_page' %}active{% endif %}">
+                            <i data-lucide="calendar-days"></i> Calendar
+                        </a></li>
+                        <li><a href="{{ url_for('floor_plan.bookings_page') }}" class="{% if ep == 'floor_plan.bookings_page' %}active{% endif %}">
+                            <i data-lucide="calendar-check"></i> My Bookings
+                        </a></li>
+                    </ul>
+                </details>
+            </li>
+
             {% if is_staff %}
-            <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if request.endpoint == 'tickets.my_tickets' %}active{% endif %}">
+            <li><a href="{{ url_for('tickets.my_tickets') }}" class="{% if ep == 'tickets.my_tickets' %}active{% endif %}">
                 <i data-lucide="ticket"></i> My Tickets
             </a></li>
-            {% endif %}
-            <li><a href="{{ url_for('floor_plan.index') }}" class="{% if request.endpoint == 'floor_plan.index' %}active{% endif %}">
-                <i data-lucide="map"></i> Floor plan
-            </a></li>
-            <li><a href="{{ url_for('floor_plan.calendar_page') }}" class="{% if request.endpoint == 'floor_plan.calendar_page' %}active{% endif %}">
-                <i data-lucide="calendar-days"></i> Calendar
-            </a></li>
-            <li><a href="{{ url_for('floor_plan.bookings_page') }}" class="{% if request.endpoint == 'floor_plan.bookings_page' %}active{% endif %}">
-                <i data-lucide="calendar-check"></i> My Bookings
-            </a></li>
-            {% if is_staff %}
-            <li><a href="{{ url_for('help.guide') }}" class="{% if request.blueprint == 'help' %}active{% endif %}">
+            <li><a href="{{ url_for('help.guide') }}" class="{% if bp == 'help' %}active{% endif %}">
                 <i data-lucide="help-circle"></i> How It Works
             </a></li>
             {% endif %}
 
-            {% if current_user and current_user.role in ('admin', 'manager', 'technician') %}
+            {% if is_staff %}
             <li class="nav-divider"><span>Administration</span></li>
-            <li><a href="{{ url_for('tickets.list_tickets') }}" class="{% if request.endpoint == 'tickets.list_tickets' %}active{% endif %}">
+
+            <li><a href="{{ url_for('tickets.list_tickets') }}" class="{% if ep == 'tickets.list_tickets' %}active{% endif %}">
                 <i data-lucide="list-checks"></i> All Tickets
             </a></li>
-            <li><a href="{{ url_for('inventory.all_models') }}" class="{% if request.endpoint == 'inventory.all_models' %}active{% endif %}">
-                <i data-lucide="package"></i> Full Inventory
-            </a></li>
-            <li><a href="{{ url_for('inventory.manage_assets') }}" class="{% if request.endpoint == 'inventory.manage_assets' %}active{% endif %}">
-                <i data-lucide="hard-drive"></i> Manage Assets
-            </a></li>
-<li><a href="{{ url_for('reports.inventory') }}" class="{% if request.endpoint == 'reports.inventory' %}active{% endif %}">
-                <i data-lucide="bar-chart-3"></i> Inventory Report
-            </a></li>
-            <li><a href="{{ url_for('reports.tickets') }}" class="{% if request.endpoint == 'reports.tickets' %}active{% endif %}">
-                <i data-lucide="activity"></i> Ticket Report
-            </a></li>
-            <li><a href="{{ url_for('reports.bookings') }}" class="{% if request.endpoint == 'reports.bookings' %}active{% endif %}">
-                <i data-lucide="calendar-check"></i> Booking Report
-            </a></li>
-            <li><a href="{{ url_for('employees.list_employees') }}" class="{% if request.blueprint == 'employees' %}active{% endif %}">
-                <i data-lucide="users"></i> Employees
-            </a></li>
-            <li><a href="{{ url_for('issue_categories.index') }}" class="{% if request.endpoint and request.endpoint.startswith('issue_categories.') %}active{% endif %}">
-                <i data-lucide="tags"></i> Issue Categories
-            </a></li>
 
-            <li class="nav-divider"><span>GPU System</span></li>
-            <li><a href="{{ url_for('gpu.inventory') }}" class="{% if request.endpoint and request.endpoint.startswith('gpu.') and 'request' not in request.endpoint %}active{% endif %}">
-                <i data-lucide="cpu"></i> GPU Inventory
-            </a></li>
-            <li><a href="{{ url_for('gpu.request_list') }}" class="{% if request.endpoint and request.endpoint.startswith('gpu.request') %}active{% endif %}">
-                <i data-lucide="inbox"></i> GPU Requests
-            </a></li>
+            {# ── Inventory group ────────────────────────────────────────── #}
+            {% set inv_active = ep in ('inventory.all_models', 'inventory.manage_assets') %}
+            <li class="nav-group">
+                <details {% if inv_active %}open{% endif %}>
+                    <summary>
+                        <span><i data-lucide="package"></i> Inventory</span>
+                        <i data-lucide="chevron-down" class="nav-chevron"></i>
+                    </summary>
+                    <ul>
+                        <li><a href="{{ url_for('inventory.all_models') }}" class="{% if ep == 'inventory.all_models' %}active{% endif %}">
+                            <i data-lucide="package"></i> Full Inventory
+                        </a></li>
+                        <li><a href="{{ url_for('inventory.manage_assets') }}" class="{% if ep == 'inventory.manage_assets' %}active{% endif %}">
+                            <i data-lucide="hard-drive"></i> Manage Assets
+                        </a></li>
+                    </ul>
+                </details>
+            </li>
+
+            {# ── Reports group ─────────────────────────────────────────── #}
+            {% set reports_active = bp == 'reports' %}
+            <li class="nav-group">
+                <details {% if reports_active %}open{% endif %}>
+                    <summary>
+                        <span><i data-lucide="bar-chart-3"></i> Reports</span>
+                        <i data-lucide="chevron-down" class="nav-chevron"></i>
+                    </summary>
+                    <ul>
+                        <li><a href="{{ url_for('reports.inventory') }}" class="{% if ep == 'reports.inventory' %}active{% endif %}">
+                            <i data-lucide="bar-chart-3"></i> Inventory
+                        </a></li>
+                        <li><a href="{{ url_for('reports.tickets') }}" class="{% if ep == 'reports.tickets' %}active{% endif %}">
+                            <i data-lucide="activity"></i> Tickets
+                        </a></li>
+                        <li><a href="{{ url_for('reports.bookings') }}" class="{% if ep == 'reports.bookings' %}active{% endif %}">
+                            <i data-lucide="calendar-check"></i> Bookings
+                        </a></li>
+                    </ul>
+                </details>
+            </li>
+
+            {# ── GPU System group ──────────────────────────────────────── #}
+            <li class="nav-group">
+                <details {% if bp == 'gpu' %}open{% endif %}>
+                    <summary>
+                        <span><i data-lucide="cpu"></i> GPU System</span>
+                        <i data-lucide="chevron-down" class="nav-chevron"></i>
+                    </summary>
+                    <ul>
+                        <li><a href="{{ url_for('gpu.inventory') }}" class="{% if ep and ep.startswith('gpu.') and 'request' not in ep %}active{% endif %}">
+                            <i data-lucide="cpu"></i> Inventory
+                        </a></li>
+                        <li><a href="{{ url_for('gpu.request_list') }}" class="{% if ep and ep.startswith('gpu.request') %}active{% endif %}">
+                            <i data-lucide="inbox"></i> Requests
+                        </a></li>
+                    </ul>
+                </details>
+            </li>
+
+            {# ── People group ──────────────────────────────────────────── #}
+            {% set people_active = bp in ('employees', 'issue_categories') %}
+            <li class="nav-group">
+                <details {% if people_active %}open{% endif %}>
+                    <summary>
+                        <span><i data-lucide="users"></i> People &amp; settings</span>
+                        <i data-lucide="chevron-down" class="nav-chevron"></i>
+                    </summary>
+                    <ul>
+                        <li><a href="{{ url_for('employees.list_employees') }}" class="{% if bp == 'employees' %}active{% endif %}">
+                            <i data-lucide="users"></i> Employees
+                        </a></li>
+                        <li><a href="{{ url_for('issue_categories.index') }}" class="{% if ep and ep.startswith('issue_categories.') %}active{% endif %}">
+                            <i data-lucide="tags"></i> Issue Categories
+                        </a></li>
+                    </ul>
+                </details>
+            </li>
             {% endif %}
         </ul>
         <div class="sidebar-footer">

@@ -487,6 +487,65 @@ select.input { cursor: pointer; }
     opacity: .6;
 }
 
+/* ── Collapsible nav groups ─────────────────────────────────────────────── */
+.nav-group { list-style: none; }
+.nav-group details { width: 100%; }
+.nav-group summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 20px;
+    color: var(--text-sidebar);
+    font-size: .9rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s, color .15s;
+    list-style: none;
+}
+/* Hide the default browser disclosure marker on summary in all browsers. */
+.nav-group summary::-webkit-details-marker { display: none; }
+.nav-group summary::marker { content: ''; }
+
+.nav-group summary > span {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+.nav-group summary:hover {
+    background: rgba(255,255,255,.05);
+    color: #fff;
+}
+.nav-group summary svg { width: 18px; height: 18px; }
+.nav-group .nav-chevron {
+    width: 14px !important;
+    height: 14px !important;
+    opacity: .55;
+    transition: transform .18s ease, opacity .15s;
+}
+.nav-group details[open] > summary .nav-chevron {
+    transform: rotate(180deg);
+    opacity: .85;
+}
+.nav-group ul {
+    list-style: none;
+    margin: 0;
+    padding: 2px 0 4px;
+}
+/* Children inside a group: indented, slightly smaller, same hover/active. */
+.nav-group ul li a {
+    padding-left: 44px;
+    font-size: .86rem;
+}
+/* When the group itself contains the active page, give the summary a subtle
+   left-border accent so the user can see which group is "current" even when
+   it's collapsed. */
+.nav-group details[open] > summary {
+    color: #fff;
+}
+
 /* ── Quick actions ──────────────────────────────────────────────────────── */
 .quick-actions {
     display: grid;
