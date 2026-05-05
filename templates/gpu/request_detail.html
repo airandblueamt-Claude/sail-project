@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}SAIL - {{ request_.request_number }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('gpu.request_list') }}" class="breadcrumb">GPU Requests</a>
+        <h2>{{ request_.request_number }} — {{ request_.title }}</h2>
+    </div>
+    <div class="page-actions">
+        {% if request_.decided_at %}
+            <span class="badge">{{ request_.decision or 'decided' }}</span>
+        {% else %}
+            <span class="badge badge-status-open">open</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h4>Request</h4>
+        <dl class="detail-list">
+            <dt>Request #</dt><dd>{{ request_.request_number }}</dd>
+            <dt>Use case</dt><dd>{{ request_.use_case or '—' }}</dd>
+            <dt>Hours</dt><dd>{{ request_.requested_hours or '—' }}</dd>
+            <dt>Window</dt>
+            <dd>
+                {% if request_.start_date or request_.end_date %}
+                    {{ request_.start_date or '?' }} → {{ request_.end_date or '?' }}
+                {% else %}—{% endif %}
+            </dd>
+            <dt>Duration</dt><dd>{{ request_.duration_text or '—' }}</dd>
+        </dl>
+    </div>
+    <div class="detail-card">
+        <h4>Requester</h4>
+        <dl class="detail-list">
+            <dt>Type</dt><dd>{{ request_.requester_type }}</dd>
+            <dt>Name</dt><dd>{{ request_.requester_name_resolved or request_.requester_name or '—' }}</dd>
+            <dt>Email</dt>
+            <dd>
+                {% set em = request_.requester_email_resolved or request_.requester_email %}
+                {% if em %}<a href="mailto:{{ em }}">{{ em }}</a>{% else %}—{% endif %}
+            </dd>
+            <dt>Organisation</dt><dd>{{ request_.requester_org or '—' }}</dd>
+            <dt>Submitted</dt><dd>{{ request_.created_at[:16] if request_.created_at else '—' }}</dd>
+        </dl>
+    </div>
+</div>
+
+{% if models %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>Models requested ({{ models|length }})</h4>
+    <table class="data-table">
+        <thead><tr><th>Model</th><th>VRAM</th><th>Count</th></tr></thead>
+        <tbody>
+            {% for m in models %}
+            <tr>
+                <td>{{ m.model_name }}</td>
+                <td>{{ m.vram_gb ~ ' GB' if m.vram_gb else '—' }}</td>
+                <td class="num">{{ m.gpu_count or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if workloads %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>Workloads ({{ workloads|length }})</h4>
+    <table class="data-table">
+        <thead><tr><th>Workload</th><th>Config</th><th>Estimated hours</th></tr></thead>
+        <tbody>
+            {% for w in workloads %}
+            <tr>
+                <td>{{ w.name }}</td>
+                <td>{{ w.config or '—' }}</td>
+                <td class="num">{{ w.estimated_hours or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if deliverables %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>Partner deliverables ({{ deliverables|length }})</h4>
+    <ul>
+        {% for d in deliverables %}
+        <li>{{ d.description }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if phases %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>Phased timeline ({{ phases|length }})</h4>
+    <table class="data-table">
+        <thead><tr><th>Phase</th><th>Target</th><th>Description</th></tr></thead>
+        <tbody>
+            {% for p in phases %}
+            <tr>
+                <td>{{ p.name }}</td>
+                <td>{{ p.target_date or '—' }}</td>
+                <td>{{ p.description or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if request_.notes %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>Notes from requester</h4>
+    <p class="specs-text">{{ request_.notes }}</p>
+</div>
+{% endif %}
+
+<div class="detail-card" style="margin-top:16px">
+    <h4>Response</h4>
+    {% if request_.decided_at %}
+        <dl class="detail-list">
+            <dt>Decision</dt><dd>{{ request_.decision or '—' }}</dd>
+            <dt>Decided by</dt><dd>{{ request_.decided_by_name or '—' }} on {{ request_.decided_at[:16] }}</dd>
+            <dt>Fit notes</dt><dd>{{ request_.fit_notes or '—' }}</dd>
+            <dt>Allocated assets</dt><dd>{{ request_.allocated_asset_tags or '—' }}</dd>
+            <dt>Response notes</dt><dd>{{ request_.response_notes or '—' }}</dd>
+        </dl>
+        {% if is_reviewer %}
+        <form method="post" action="{{ url_for('gpu.request_reopen', number=request_.request_number) }}"
+              style="margin-top:12px" onsubmit="return confirm('Reopen and clear the decision?');">
+            <button type="submit" class="btn btn-ghost">Reopen request</button>
+        </form>
+        {% endif %}
+    {% else %}
+        <p class="muted">No response recorded yet.</p>
+    {% endif %}
+</div>
+
+{% if is_reviewer and not request_.decided_at %}
+<div class="section">
+    <h3>Record response</h3>
+    <form method="post" action="{{ url_for('gpu.request_respond', number=request_.request_number) }}" class="form-card">
+        <div class="form-row">
+            <label>Decision *</label>
+            <select name="decision" required class="input">
+                {% for d in decisions %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Fit notes</label>
+            <textarea name="fit_notes" rows="3" class="input"
+                      placeholder="What we can offer. e.g. 'A40 substitutes A100/V100 cleanly. Consumer GPUs not in stock — recommend cloud.'"></textarea>
+        </div>
+        <div class="form-row">
+            <label>Allocated assets (comma-separated tags)</label>
+            <input type="text" name="allocated_asset_tags" class="input"
+                   placeholder="e.g. GPU-CLOUD-001, GPU-CLOUD-002, GPU-CLOUD-003, GPU-CLOUD-004">
+            <small class="muted">From the <a href="{{ url_for('gpu.inventory') }}" target="_blank">GPU inventory</a>.</small>
+        </div>
+        <div class="form-row">
+            <label>Response notes</label>
+            <textarea name="response_notes" rows="3" class="input"
+                      placeholder="Conditions, scope, follow-ups, what you wrote back to the requester."></textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Record response</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

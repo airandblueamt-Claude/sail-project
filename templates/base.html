@@ -78,6 +78,14 @@
             <li><a href="{{ url_for('issue_categories.index') }}" class="{% if request.endpoint and request.endpoint.startswith('issue_categories.') %}active{% endif %}">
                 <i data-lucide="tags"></i> Issue Categories
             </a></li>
+
+            <li class="nav-divider"><span>GPU System</span></li>
+            <li><a href="{{ url_for('gpu.inventory') }}" class="{% if request.endpoint and request.endpoint.startswith('gpu.') and 'request' not in request.endpoint %}active{% endif %}">
+                <i data-lucide="cpu"></i> GPU Inventory
+            </a></li>
+            <li><a href="{{ url_for('gpu.request_list') }}" class="{% if request.endpoint and request.endpoint.startswith('gpu.request') %}active{% endif %}">
+                <i data-lucide="inbox"></i> GPU Requests
+            </a></li>
             {% endif %}
         </ul>
         <div class="sidebar-footer">

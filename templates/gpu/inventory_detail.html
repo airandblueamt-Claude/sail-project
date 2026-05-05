@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}SAIL - {{ asset.asset_tag }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('gpu.inventory') }}" class="breadcrumb">GPU Inventory</a>
+        <h2>{{ asset.asset_tag }} — {{ asset.model or asset.kind }}</h2>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h4>Asset</h4>
+        <dl class="detail-list">
+            <dt>Asset tag</dt><dd>{{ asset.asset_tag }}</dd>
+            <dt>Kind</dt><dd>{{ asset.kind }}</dd>
+            <dt>Model</dt><dd>{{ asset.model or '—' }}</dd>
+            {% if asset.vram_gb %}<dt>VRAM</dt><dd>{{ asset.vram_gb }} GB</dd>{% endif %}
+            <dt>Cluster</dt><dd>{{ asset.cluster or '—' }}</dd>
+            <dt>Role</dt><dd>{{ asset.node_role or '—' }}</dd>
+            {% if asset.kind == 'host' %}
+                <dt>XCC IP</dt><dd>{{ asset.xcc_ip or '—' }}</dd>
+            {% else %}
+                <dt>PCI slot</dt><dd>{{ asset.pci_slot or '—' }}</dd>
+                {% if asset.parent_tag %}
+                <dt>Parent host</dt>
+                <dd><a href="{{ url_for('gpu.inventory_detail', asset_tag=asset.parent_tag) }}">{{ asset.parent_tag }}</a></dd>
+                {% endif %}
+            {% endif %}
+            <dt>Notes</dt><dd>{{ asset.notes or '—' }}</dd>
+        </dl>
+    </div>
+
+    {% if asset.kind == 'host' %}
+    <div class="detail-card">
+        <h4>GPUs in this host ({{ children|length }})</h4>
+        {% if children %}
+        <table class="data-table">
+            <thead><tr><th>Asset tag</th><th>Model</th><th>VRAM</th><th>Slot</th></tr></thead>
+            <tbody>
+                {% for c in children %}
+                <tr>
+                    <td><a href="{{ url_for('gpu.inventory_detail', asset_tag=c.asset_tag) }}">{{ c.asset_tag }}</a></td>
+                    <td>{{ c.model or '—' }}</td>
+                    <td>{{ c.vram_gb ~ ' GB' if c.vram_gb else '—' }}</td>
+                    <td>{{ c.pci_slot or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No GPUs on this host (head/login node).</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<div class="section">
+    <h3>Recent allocation requests touching this asset</h3>
+    {% if related %}
+    <table class="data-table">
+        <thead><tr><th>Request #</th><th>Title</th><th>Decision</th><th>Decided</th></tr></thead>
+        <tbody>
+            {% for r in related %}
+            <tr>
+                <td><a href="{{ url_for('gpu.request_detail', number=r.request_number) }}">{{ r.request_number }}</a></td>
+                <td>{{ r.title }}</td>
+                <td>{{ r.decision or '—' }}</td>
+                <td>{{ r.decided_at[:10] if r.decided_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">This asset hasn't appeared in any decided allocation request yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

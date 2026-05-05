@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}SAIL - GPU Requests{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>GPU Allocation Requests</h2>
+        <p class="muted" style="margin:4px 0 0">Open requests at top. Decided requests below.</p>
+    </div>
+    <div class="page-actions">
+        <a href="{{ url_for('gpu.inventory') }}" class="btn btn-ghost">Inventory</a>
+        <a href="{{ url_for('gpu.request_new') }}" class="btn btn-primary">+ New request</a>
+    </div>
+</div>
+
+<form method="get" class="filter-bar">
+    <select name="state" class="input">
+        <option value="">All</option>
+        <option value="open"    {% if f_state == 'open' %}selected{% endif %}>Open</option>
+        <option value="decided" {% if f_state == 'decided' %}selected{% endif %}>Decided</option>
+    </select>
+    <label class="check">
+        <input type="checkbox" name="mine" value="yes" {% if f_mine == 'yes' %}checked{% endif %}>
+        My requests only
+    </label>
+    <button type="submit" class="btn btn-ghost">Apply</button>
+    <a href="{{ url_for('gpu.request_list') }}" class="btn btn-ghost">Clear</a>
+</form>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Request #</th>
+            <th>Title</th>
+            <th>Requester</th>
+            <th>Models / Workloads</th>
+            <th>Hours</th>
+            <th>State</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in requests %}
+        <tr>
+            <td><a href="{{ url_for('gpu.request_detail', number=r.request_number) }}">{{ r.request_number }}</a></td>
+            <td>{{ r.title }}</td>
+            <td>
+                {{ r.requester_name_resolved or r.requester_name or '—' }}
+                {% if r.requester_org %}<br><small class="muted">{{ r.requester_org }}</small>{% endif %}
+            </td>
+            <td class="num">{{ r.n_models }} / {{ r.n_workloads }}</td>
+            <td class="num">{{ r.requested_hours or '—' }}</td>
+            <td>
+                {% if r.decided_at %}
+                    <span class="badge">{{ r.decision or 'decided' }}</span>
+                {% else %}
+                    <span class="badge badge-status-open">open</span>
+                {% endif %}
+            </td>
+            <td>{{ r.created_at[:10] if r.created_at else '' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
+            No requests yet. Use "+ New request" to submit one.
+        </td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

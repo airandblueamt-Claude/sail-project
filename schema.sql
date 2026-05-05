@@ -187,6 +187,96 @@ CREATE TABLE IF NOT EXISTS issue_categories (
 );
 CREATE INDEX IF NOT EXISTS idx_issue_categories_active ON issue_categories(is_active);
 
+-- ── GPU subsystem (separate domain) ────────────────────────────────────────
+-- Lives entirely apart from `assets` and `tickets`. Inventory is gpu_assets
+-- (hosts and GPUs in one table, parent_asset_id self-ref). Allocation
+-- requests use a builder-style form: gpu_requests is the parent record,
+-- and the four line-item tables hold the variable-shape blocks.
+
+CREATE TABLE IF NOT EXISTS gpu_assets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_tag       TEXT NOT NULL UNIQUE,           -- Lenovo serial for hosts; GPU-* for GPUs
+    kind            TEXT NOT NULL CHECK(kind IN ('host','gpu')),
+    model           TEXT,                            -- 'NVIDIA A40' / 'ESXi Host' / etc.
+    vram_gb         INTEGER,                         -- nullable for hosts and head nodes
+    xcc_ip          TEXT,                            -- XCC management IP; hosts only
+    cluster         TEXT,                            -- 'HPC-Linux' / 'VMware Cloud'
+    node_role       TEXT,                            -- 'Head' / 'Accelerator' / 'Compute' / 'Cloud / HCI'
+    pci_slot        INTEGER,                         -- GPUs only
+    parent_asset_id INTEGER REFERENCES gpu_assets(id),
+    notes           TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_assets_parent ON gpu_assets(parent_asset_id);
+CREATE INDEX IF NOT EXISTS idx_gpu_assets_kind   ON gpu_assets(kind);
+
+CREATE TABLE IF NOT EXISTS gpu_requests (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_number       TEXT NOT NULL UNIQUE,       -- 'GPU-2026-0001'
+    title                TEXT NOT NULL,
+    use_case             TEXT,
+    requester_id         INTEGER REFERENCES employees(id),
+    requester_name       TEXT,
+    requester_email      TEXT,
+    requester_org        TEXT,
+    requester_type       TEXT DEFAULT 'internal'
+                         CHECK(requester_type IN ('internal','partner','academic','vendor')),
+    requested_hours      INTEGER,
+    start_date           TEXT,
+    end_date             TEXT,
+    duration_text        TEXT,                       -- free-text e.g. "12 months (renewable)"
+    notes                TEXT,
+    decision             TEXT,                       -- approved / approved_with_conditions / rejected
+    fit_notes            TEXT,
+    response_notes       TEXT,
+    allocated_asset_tags TEXT,                       -- comma-separated tags from gpu_assets
+    decided_by           INTEGER REFERENCES employees(id),
+    decided_at           TEXT,                       -- NULL = open
+    created_at           TEXT DEFAULT (datetime('now')),
+    updated_at           TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_requests_decided   ON gpu_requests(decided_at);
+CREATE INDEX IF NOT EXISTS idx_gpu_requests_requester ON gpu_requests(requester_id);
+
+CREATE TABLE IF NOT EXISTS gpu_request_models (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id  INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order  INTEGER DEFAULT 0,
+    model_name  TEXT NOT NULL,
+    vram_gb     INTEGER,
+    gpu_count   INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_models_req ON gpu_request_models(request_id);
+
+CREATE TABLE IF NOT EXISTS gpu_request_workloads (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id      INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order      INTEGER DEFAULT 0,
+    name            TEXT NOT NULL,
+    config          TEXT,
+    estimated_hours INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_workloads_req ON gpu_request_workloads(request_id);
+
+CREATE TABLE IF NOT EXISTS gpu_request_deliverables (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id  INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order  INTEGER DEFAULT 0,
+    description TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_deliverables_req ON gpu_request_deliverables(request_id);
+
+CREATE TABLE IF NOT EXISTS gpu_request_phases (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id  INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order  INTEGER DEFAULT 0,
+    name        TEXT NOT NULL,
+    target_date TEXT,
+    description TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_phases_req ON gpu_request_phases(request_id);
+
 -- ── Audit log ───────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS audit_log (
