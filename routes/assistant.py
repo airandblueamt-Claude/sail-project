@@ -4,8 +4,8 @@ SAIL Helper — tool-using read-only assistant backed by Ollama.
 The agent is wired this way:
 
   1. Every turn, the server sends Ollama:
-       - a small system prompt (role + schema primer + lightweight
-         snapshot — see SYSTEM_PROMPT_TEMPLATE + _build_user_snapshot)
+       - a small system prompt loaded from agents/sail_helper.md
+         with the live {snapshot} placeholder substituted in
        - the full tool registry from routes/assistant_tools.py
        - the conversation history
        - the user's new message
@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import requests
 from flask import Blueprint, jsonify, request, g
@@ -66,38 +67,31 @@ MAX_HISTORY_TURNS = 8
 MAX_TOOL_TURNS = 5
 
 
-SCHEMA_PRIMER = """\
-SAIL (Smart Asset Inventory & Logistics) is AMT's IT asset and ticketing app.
+# Where the externalised agent definition lives. The file is read on
+# every request so edits land without a server restart. Setting
+# SAIL_AGENT_HOTRELOAD=0 caches the file in memory for a tiny speedup
+# (and to "freeze" the prompt while editing).
+AGENT_PROMPT_PATH = Path(__file__).resolve().parent.parent / 'agents' / 'sail_helper.md'
+_HOTRELOAD = os.environ.get('SAIL_AGENT_HOTRELOAD', '1') != '0'
+_CACHED_PROMPT: str | None = None
 
-Core tables and how they fit together:
-  - equipment_models : product lines (e.g. "30 Lenovo Workstations")
-  - assets           : individual physical units, tagged SAIL-NNNNN
-  - tickets          : maintenance / move / incident / decommission /
-                       new_request, numbered TKT-NNNN. Tickets can
-                       reference an asset_id and/or a gpu_request_id.
-  - gpu_assets       : the GPU / BYOC infrastructure (hosts + cards)
-  - gpu_requests     : GPU/BYOC request drafts and decisions, numbered
-                       GPU-YYYY-NNNN. Has a request_kind:
-                         new_infra            (BYOC VM brief)
-                         gpu_allocation       (short list of GPU models)
-                         compute_partnership  (time on existing infra
-                                               + workloads + phases)
-                         other
-                       Source = manual | agent | imported. Agent-sourced
-                       rows have an agent_confidence and raw_extraction_json.
 
-User-facing URLs you can refer them to:
-  /tickets/new           : raise a ticket (asset-tied or against a GPU request)
-  /gpu/requests/new      : draft a new GPU request — pick the kind first
-  /gpu/requests/<NUM>    : view / approve a specific request
-  /gpu/                  : GPU inventory (hosts + accelerator cards)
-  /inventory/            : the full equipment catalog
-  /floor-plan/           : interactive floor plan with bookings
-
-Roles: admin / manager / technician / employee. Reviewer-only actions
-(approve/respond to requests, change ticket status) are restricted to
-admin / manager / technician.
-"""
+def _load_system_prompt_template() -> str:
+    """Return the markdown system-prompt template (with {snapshot}
+    placeholder still in place). Re-reads from disk unless hot-reload
+    is disabled."""
+    global _CACHED_PROMPT
+    if _HOTRELOAD or _CACHED_PROMPT is None:
+        try:
+            _CACHED_PROMPT = AGENT_PROMPT_PATH.read_text(encoding='utf-8')
+        except FileNotFoundError:
+            # If the markdown is missing, fail loud — there's no useful
+            # behaviour without the agent definition.
+            raise RuntimeError(
+                f"Agent definition not found at {AGENT_PROMPT_PATH}. "
+                "Restore agents/sail_helper.md or set a different path."
+            )
+    return _CACHED_PROMPT
 
 
 def _build_user_snapshot(conn, user) -> str:
@@ -120,35 +114,8 @@ def _build_user_snapshot(conn, user) -> str:
     )
 
 
-SYSTEM_PROMPT_TEMPLATE = """\
-You are SAIL Helper, a concise read-only assistant inside AMT's SAIL app.
-
-{schema}
-
-{snapshot}
-
-You have READ-ONLY tools that query SAIL's database. Call them whenever
-the user asks about a specific record, count, or set of records you do
-not already know. Examples:
-
-  - "What tickets do I have open?" -> find_tickets(scope='mine', status='open')
-  - "Show me the OrbitronAI request" -> find_gpu_requests(query='OrbitronAI')
-    or get_gpu_request(request_number=...)
-  - "Is asset SAIL-16038 still in stock?" -> find_assets(query='SAIL-16038')
-  - "Is TKT-0005 still open?" -> get_ticket(ticket_number='TKT-0005')
-
-How to answer:
-- Be terse. 1-3 sentences for simple questions, a short bulleted list
-  for enumerations. No marketing fluff.
-- For factual questions about records, CALL A TOOL first. Don't guess.
-- For procedural questions (how to raise a ticket / draft a request),
-  walk the user through the right URL + the form fields. If you need
-  the list of issue categories first, call list_issue_categories().
-- Never claim you took an action — you are read-only. Tell the user
-  the URL to click to do it themselves (e.g. /tickets/new?type=incident).
-- Do not invent ticket numbers, request numbers, or asset tags. If a
-  tool returns no rows or an 'error' key, say so plainly.
-"""
+# SYSTEM_PROMPT_TEMPLATE used to live here as a Python string. It moved
+# to agents/sail_helper.md — see _load_system_prompt_template above.
 
 
 def _build_messages(history: list, user_message: str, system: str) -> list:
@@ -238,9 +205,9 @@ def chat():
         # Make rows act like dicts for the snapshot builder.
         snapshot = _build_user_snapshot(conn, g.user)
 
-    system = SYSTEM_PROMPT_TEMPLATE.format(
-        schema=SCHEMA_PRIMER.strip(), snapshot=snapshot
-    )
+    # Direct replace (not str.format) — the markdown contains literal
+    # `{"error": ...}` examples that would confuse Python's brace parser.
+    system = _load_system_prompt_template().replace('{snapshot}', snapshot)
     messages = _build_messages(history, user_message, system)
 
     try:
