@@ -11,6 +11,7 @@
         })();
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='assistant_widget.css') }}">
     <script src="https://unpkg.com/lucide@latest"></script>
     {% block extra_head %}{% endblock %}
 </head>
@@ -229,5 +230,6 @@
         })();
     </script>
     <script src="{{ url_for('static', filename='palette.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='assistant_widget.js') }}" defer></script>
 </body>
 </html>

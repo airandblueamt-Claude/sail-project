@@ -1,5 +1,5 @@
 """SAIL — Smart Asset Inventory & Logistics."""
-from flask import Flask, session, g, redirect, url_for, request, render_template, flash
+from flask import Flask, session, g, redirect, url_for, request, render_template, flash, jsonify
 from database import get_db
 from config import SECRET_KEY, UPLOAD_FOLDER
 import os
@@ -52,9 +52,13 @@ def create_app():
                 else:
                     session.clear()
 
-        # Allow login/static without auth
+        # Allow login/static without auth. The assistant chat endpoint is a
+        # JSON-POST surface — it returns its own 401 instead of getting an
+        # HTML redirect that would confuse fetch() in the widget.
         public = ('login', 'static')
         if not g.user and request.endpoint and request.endpoint not in public:
+            if request.path == '/assistant/chat':
+                return jsonify({"error": "not authenticated"}), 401
             return redirect(url_for('login'))
 
         # If logged-in user must change password, lock them to change_password + logout.
@@ -268,6 +272,7 @@ def create_app():
     from routes.issue_categories import issue_categories_bp
     from routes.gpu import gpu_bp
     from routes.api import api_bp
+    from routes.assistant import assistant_bp
     from app.floor_plan import floor_plan_bp, init_floor_plan
 
     app.register_blueprint(dashboard_bp)
@@ -279,6 +284,7 @@ def create_app():
     app.register_blueprint(issue_categories_bp, url_prefix='/issue-categories')
     app.register_blueprint(gpu_bp, url_prefix='/gpu')
     app.register_blueprint(api_bp, url_prefix='/api/v1')
+    app.register_blueprint(assistant_bp, url_prefix='/assistant')
     app.register_blueprint(floor_plan_bp, url_prefix='/floor-plan')
     init_floor_plan(app)
 
