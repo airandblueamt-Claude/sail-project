@@ -31,6 +31,14 @@ def create_app():
     @app.before_request
     def load_user():
         g.user = None
+        g.api_token = None
+
+        # /api/v1/* uses bearer-token auth, not the session cookie — let it
+        # through the session gate entirely. Each route enforces its own
+        # @require_token('read'/'write') decorator. /api/v1/health is open.
+        if request.path.startswith('/api/v1/'):
+            return None
+
         user_id = session.get('user_id')
         if user_id:
             with get_db() as conn:
@@ -259,6 +267,7 @@ def create_app():
     from routes.reports import reports_bp
     from routes.issue_categories import issue_categories_bp
     from routes.gpu import gpu_bp
+    from routes.api import api_bp
     from app.floor_plan import floor_plan_bp, init_floor_plan
 
     app.register_blueprint(dashboard_bp)
@@ -269,6 +278,7 @@ def create_app():
     app.register_blueprint(reports_bp, url_prefix='/reports')
     app.register_blueprint(issue_categories_bp, url_prefix='/issue-categories')
     app.register_blueprint(gpu_bp, url_prefix='/gpu')
+    app.register_blueprint(api_bp, url_prefix='/api/v1')
     app.register_blueprint(floor_plan_bp, url_prefix='/floor-plan')
     init_floor_plan(app)
 

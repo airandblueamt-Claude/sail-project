@@ -25,6 +25,12 @@ python app.py                     # serves http://localhost:5555
 
 There is no test suite, linter, or build step configured.
 
+After pulling, apply any new schema migrations before starting the app:
+
+```bash
+python migrations/<latest-dated>.py   # idempotent; backs up sail.db first
+```
+
 ## Architecture
 
 ### Flask app factory + blueprints
@@ -39,6 +45,10 @@ There is no test suite, linter, or build step configured.
 | `employees_bp` | `/employees` | Employee management (admin) |
 | `reports_bp` | `/reports` | Admin-only weekly/monthly rollups for inventory & tickets, with CSV export |
 | `help_bp` | `/help` | In-app guide |
+| `issue_categories_bp` | `/issue-categories` | Admin CRUD for the ticket `issue_categories` catalog |
+| `gpu_bp` | `/gpu` | Separate GPU subsystem (see below) |
+| `floor_plan_bp` | `/floor-plan` | Interactive floor-plan view of asset locations |
+| `api_bp` | `/api/v1` | Read-only JSON API for external agents — bearer-token auth (see below) |
 
 Auth is session-based (email + password, validated against `employees.password_hash` via `werkzeug.security`). `before_request` loads the user from `session['user_id']` into `g.user` and redirects unauthenticated requests to `/login` except for `login` and `static`.
 
@@ -66,6 +76,29 @@ Other tables: `categories`, `locations`, `departments`, `tickets` + `ticket_comm
 - `tickets.status`: `open` / `in_progress` / `waiting` / `resolved` / `closed`
 
 Changing any of these means editing `schema.sql` **and** the form/template values — SQLite will reject non-matching inserts silently-looking but fatally.
+
+### GPU subsystem
+
+The GPU work (cluster nodes, accelerator cards, time-bound access requests) lives in its own tables — `gpu_assets` and `gpu_requests` — and its own blueprint (`routes/gpu.py`). It does **not** share the `assets` / `tickets` schema, deliberately: requests have their own number sequence (`GPUR-NNNN`), an approval flow distinct from tickets, and per-block date/hour validation. Treat it as a sibling subsystem, not a flavour of the main inventory.
+
+### External JSON API (`/api/v1`)
+
+`routes/api.py` exposes a read-only JSON API for external agents (Ollama, Claude, etc.). Conventions worth knowing before extending it:
+
+- **Auth**: `Authorization: Bearer sail_<hex>`. Tokens are minted by `scripts/mint_api_token.py`; the plaintext is printed **once** and only `sha256(plaintext)` is stored in `api_tokens.token_hash`. There is no way to recover a lost token — re-mint and revoke.
+- **Scopes**: comma-separated string on the token row. Every current route uses `@require_token('read')`. When you add write routes, introduce a `write` scope rather than widening `read`.
+- **Pagination**: `?limit=` (default 50, max 500) + `?offset=`; responses always shape as `{items, total, limit, offset}` (collections) or the bare object (single resource).
+- **Serializers**: `_serialize_asset`, `_serialize_ticket`, `_serialize_employee` are the single source of truth for response shape — don't hand-build dicts in route handlers.
+- Mint / list / revoke: `python scripts/mint_api_token.py --name X --email Y@… [--scopes read]`, `--list`, `--revoke <id>`.
+
+### Schema migrations
+
+Two parallel mechanisms — pick the right one:
+
+- **`migrations/<YYYY-MM-DD>-<slug>.py`** — dated, idempotent, single-purpose scripts. Each one backs up `sail.db` into `backups/` before mutating, uses `CREATE TABLE IF NOT EXISTS` / equivalent guards, and is safe to re-run. This is the preferred path for new schema changes. Run with `python migrations/<file>.py`.
+- **`migrate_db.py`** — older catch-all migration runner. Don't add new logic to it; write a new dated script in `migrations/` instead.
+
+`schema.sql` is still the source of truth for a **fresh** install (`init_db.py` applies it). When you add a migration, also update `schema.sql` so newly-initialised DBs start with the new shape.
 
 ### Email
 

@@ -1,0 +1,25 @@
+From: Alomairi, Ali B <ali.alomairi@aramco.com>
+Sent: Wednesday, April 15, 2026 12:07 PM
+To: Bawadod, Omar S <omar.bawadod@aramco.com>
+Cc: Sowayigh, Ibrahim M <ibrahim.sowayigh@aramco.com>; Alhashem, Noorah S <noorah.hashem@aramco.com>
+Subject: RE: Collaboration Opportunity: Leveraging Aramco's Computational Infrastructure to Support KFUPM GPU Demand
+
+Classification: Saudi Aramco: Company General Use
+
+Greetings Omar,
+
+Please find below models requested by KFUPM:
+1.    RTX 5080 – 16 GB VRAM
+2.    A4500 or a similar model VRAM 20GB
+3.    RTX 4090 – 24 GB VRAM
+4.    NVIDIA A10G – 24 GB VRAM
+5.    NVIDIA A100 – 40 GB VRAM
+6.    NVIDIA V100 - 32GB VRAM
+
+Mostly, two GPUs will be needed for each module. In some use cases, the user may need up to 8 GPUs.
+
+Regards,
+Ali
+
+
+This email has been classified as Saudi Aramco: Company General Use on 4/15/2026 12:06 PM

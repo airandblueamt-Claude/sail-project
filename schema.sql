@@ -277,6 +277,23 @@ CREATE TABLE IF NOT EXISTS gpu_request_phases (
 );
 CREATE INDEX IF NOT EXISTS idx_gpu_request_phases_req ON gpu_request_phases(request_id);
 
+-- ── API tokens (bearer auth for external agents / integrations) ───────────
+-- Token plaintext is shown once at creation; only the sha256 hash is stored.
+-- `scopes` is a comma-separated list — for now {'read'} only; later {'read','write'}.
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,                      -- "ollama-agent", "claude-gpu-node"
+    token_hash    TEXT NOT NULL UNIQUE,               -- sha256(plaintext) hex
+    employee_id   INTEGER NOT NULL REFERENCES employees(id),
+    scopes        TEXT NOT NULL DEFAULT 'read',
+    last_used_at  TEXT,
+    revoked_at    TEXT,
+    created_at    TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_hash     ON api_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_employee ON api_tokens(employee_id);
+
 -- ── Audit log ───────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS audit_log (
