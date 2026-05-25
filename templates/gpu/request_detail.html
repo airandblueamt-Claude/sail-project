@@ -112,13 +112,35 @@
 {% endif %}
 
 {% if vm_groups %}
+{# Pre-compute per-group and grand-total subtotals (VMs / vCPU / RAM / disk). #}
+{% set ns = namespace(g_vms=0, g_vcpu=0, g_ram=0, g_disk=0) %}
+{% for grp in vm_groups %}
+    {% for r in grp.roles %}
+        {% set vms = (r.vm_count or 0) %}
+        {% set ns.g_vms = ns.g_vms + vms %}
+        {% set ns.g_vcpu = ns.g_vcpu + vms * (r.vcpu_per_vm or 0) %}
+        {% set ns.g_ram = ns.g_ram + vms * (r.ram_gb_per_vm or 0) %}
+        {% set ns.g_disk = ns.g_disk + vms * (r.disk_gb_per_vm or 0) %}
+    {% endfor %}
+{% endfor %}
 <div class="detail-card" style="margin-top:16px">
     <h4>VM groups ({{ vm_groups|length }})</h4>
     {% for grp in vm_groups %}
+        {% set gns = namespace(vms=0, vcpu=0, ram=0, disk=0) %}
+        {% for r in grp.roles %}
+            {% set vms = (r.vm_count or 0) %}
+            {% set gns.vms = gns.vms + vms %}
+            {% set gns.vcpu = gns.vcpu + vms * (r.vcpu_per_vm or 0) %}
+            {% set gns.ram = gns.ram + vms * (r.ram_gb_per_vm or 0) %}
+            {% set gns.disk = gns.disk + vms * (r.disk_gb_per_vm or 0) %}
+        {% endfor %}
         <div style="margin-top:{{ '0' if loop.first else '14px' }}">
             <strong>{{ grp.group.name }}</strong>
             {% if grp.group.summary %}
                 <span class="muted">— {{ grp.group.summary }}</span>
+            {% endif %}
+            {% if grp.group.notes %}
+                <p class="muted" style="margin:4px 0 0;font-size:0.9em;white-space:pre-wrap">{{ grp.group.notes }}</p>
             {% endif %}
             {% if grp.roles %}
             <table class="data-table" style="margin-top:6px">
@@ -144,14 +166,32 @@
                         <td class="num">{{ (r.disk_gb_per_vm ~ ' GB') if r.disk_gb_per_vm else '—' }}</td>
                         <td>{{ r.disk_type or '—' }}</td>
                         <td>{{ r.os or '—' }}</td>
-                        <td>{{ r.notes or '—' }}</td>
+                        <td style="white-space:pre-wrap">{{ r.notes or '—' }}</td>
                     </tr>
                     {% endfor %}
+                    {% if gns.vms %}
+                    <tr style="font-weight:600;background:var(--bg-soft,#f7f7f7)">
+                        <td>Subtotal</td>
+                        <td class="num">{{ gns.vms }}</td>
+                        <td class="num">{{ gns.vcpu or '—' }}</td>
+                        <td class="num">{{ (gns.ram ~ ' GB') if gns.ram else '—' }}</td>
+                        <td class="num">{{ (gns.disk ~ ' GB') if gns.disk else '—' }}</td>
+                        <td colspan="3"></td>
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
             {% endif %}
         </div>
     {% endfor %}
+    {% if ns.g_vms %}
+    <p style="margin-top:14px;font-weight:600">
+        Grand total:
+        <span class="muted" style="font-weight:400">
+            {{ ns.g_vms }} VMs · {{ ns.g_vcpu }} vCPU · {{ ns.g_ram }} GB RAM · {{ ns.g_disk }} GB disk
+        </span>
+    </p>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -159,15 +199,33 @@
 <div class="detail-card" style="margin-top:16px">
     <h4>Workloads ({{ workloads|length }})</h4>
     <table class="data-table">
-        <thead><tr><th>Workload</th><th>Config</th><th>Estimated hours</th></tr></thead>
+        <thead><tr><th>Workload</th><th>Config</th><th class="num">Estimated hours</th></tr></thead>
         <tbody>
             {% for w in workloads %}
             <tr>
                 <td>{{ w.name }}</td>
                 <td>{{ w.config or '—' }}</td>
-                <td class="num">{{ w.estimated_hours or '—' }}</td>
+                <td class="num">
+                    {% if w.estimated_hours and w.estimated_hours_max and w.estimated_hours_max != w.estimated_hours %}
+                        {{ w.estimated_hours }}–{{ w.estimated_hours_max }}
+                    {% elif w.estimated_hours %}
+                        {{ w.estimated_hours }}
+                    {% else %}—{% endif %}
+                </td>
             </tr>
             {% endfor %}
+            {# Auto-sum of estimated hours min/max across all workloads. #}
+            {% set total_min = workloads | sum(attribute='estimated_hours') %}
+            {% set total_max = 0 %}
+            {% for w in workloads %}{% set total_max = total_max + (w.estimated_hours_max or w.estimated_hours or 0) %}{% endfor %}
+            {% if total_min or total_max %}
+            <tr style="font-weight:600;background:var(--bg-soft,#f7f7f7)">
+                <td>Total</td><td></td>
+                <td class="num">
+                    {% if total_min and total_max and total_max != total_min %}{{ total_min }}–{{ total_max }}{% elif total_min %}{{ total_min }}{% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endif %}
         </tbody>
     </table>
 </div>

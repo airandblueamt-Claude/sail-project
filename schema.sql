@@ -283,12 +283,16 @@ CREATE INDEX IF NOT EXISTS idx_gpu_request_models_req ON gpu_request_models(requ
 
 -- VM groups (new_infra only) — one row per group ("Kubernetes Cluster
 -- Nodes", "PostgreSQL", "Redis"...). Each group has many vm_roles below.
+-- `notes` is for variant data that doesn't fit the standard role columns
+-- (e.g. PostgreSQL "Databases Hosted: logto, agent_dns, ..." or Redis
+-- "Version: 7.0 / Eviction: allkeys-lru").
 CREATE TABLE IF NOT EXISTS gpu_request_vm_groups (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id  INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
     sort_order  INTEGER DEFAULT 0,
     name        TEXT NOT NULL,                        -- "Kubernetes Cluster Nodes"
-    summary     TEXT                                  -- "30 VMs recommended"
+    summary     TEXT,                                 -- "30 VMs recommended"
+    notes       TEXT                                  -- group-level variant data
 );
 CREATE INDEX IF NOT EXISTS idx_gpu_request_vm_groups_req ON gpu_request_vm_groups(request_id);
 
@@ -335,12 +339,13 @@ CREATE TABLE IF NOT EXISTS gpu_request_fields (
 CREATE INDEX IF NOT EXISTS idx_gpu_request_fields_req ON gpu_request_fields(request_id);
 
 CREATE TABLE IF NOT EXISTS gpu_request_workloads (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_id      INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
-    sort_order      INTEGER DEFAULT 0,
-    name            TEXT NOT NULL,
-    config          TEXT,
-    estimated_hours INTEGER
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id          INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order          INTEGER DEFAULT 0,
+    name                TEXT NOT NULL,
+    config              TEXT,
+    estimated_hours     INTEGER,                      -- min when a range is given (e.g. "200-300 hours" -> 200)
+    estimated_hours_max INTEGER                       -- nullable; e.g. "200-300 hours" -> 300
 );
 CREATE INDEX IF NOT EXISTS idx_gpu_request_workloads_req ON gpu_request_workloads(request_id);
 

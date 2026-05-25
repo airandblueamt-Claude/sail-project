@@ -44,7 +44,7 @@ BLOCK_FIELDS = {
                                    'host_vcpu', 'host_ram_gb',
                                    'host_disk_gb', 'host_os')},
     'workloads':     {'required': ('name',),
-                      'optional': ('config', 'estimated_hours')},
+                      'optional': ('config', 'estimated_hours', 'estimated_hours_max')},
     'deliverables':  {'required': ('description',),
                       'optional': ()},
     'phases':        {'required': ('name',),
@@ -52,7 +52,8 @@ BLOCK_FIELDS = {
     'contributions': {'required': ('name',),
                       'optional': ('description', 'benefit')},
 }
-INT_FIELDS = {'vram_gb', 'gpu_count', 'gpu_count_max', 'estimated_hours',
+INT_FIELDS = {'vram_gb', 'gpu_count', 'gpu_count_max',
+              'estimated_hours', 'estimated_hours_max',
               'host_vcpu', 'host_ram_gb', 'host_disk_gb'}
 
 # Sections persisted into gpu_request_fields. The keys listed are what the
@@ -267,14 +268,14 @@ def _parse_vm_groups(form):
 
     Empty groups (no name and no non-empty role) are dropped silently.
     """
-    g_pat = re.compile(r'^vm_groups\[(\d+)\]\[(name|summary)\]$')
+    g_pat = re.compile(r'^vm_groups\[(\d+)\]\[(name|summary|notes)\]$')
     r_pat = re.compile(r'^vm_groups\[(\d+)\]\[roles\]\[(\d+)\]\[(\w+)\]$')
     groups = {}
     for key, val in form.items():
         m = g_pat.match(key)
         if m:
             g_idx = int(m.group(1))
-            groups.setdefault(g_idx, {'name': '', 'summary': '', 'roles': {}})
+            groups.setdefault(g_idx, {'name': '', 'summary': '', 'notes': '', 'roles': {}})
             groups[g_idx][m.group(2)] = val.strip()
             continue
         m = r_pat.match(key)
@@ -282,7 +283,7 @@ def _parse_vm_groups(form):
             g_idx = int(m.group(1))
             r_idx = int(m.group(2))
             field = m.group(3)
-            groups.setdefault(g_idx, {'name': '', 'summary': '', 'roles': {}})
+            groups.setdefault(g_idx, {'name': '', 'summary': '', 'notes': '', 'roles': {}})
             groups[g_idx]['roles'].setdefault(r_idx, {})[field] = val.strip()
 
     # Flatten + drop empties; coerce role ints.
@@ -322,6 +323,7 @@ def _parse_vm_groups(form):
         cleaned.append({
             'name': g['name'].strip(),
             'summary': g['summary'].strip() or None,
+            'notes': g['notes'].strip() or None,
             'roles': roles_clean,
         })
     return cleaned, errors
@@ -451,9 +453,10 @@ def request_new():
             for sort_order, row in enumerate(cleaned_blocks['workloads']):
                 conn.execute(
                     "INSERT INTO gpu_request_workloads "
-                    "(request_id, sort_order, name, config, estimated_hours) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (req_id, sort_order, row['name'], row.get('config'), row.get('estimated_hours')))
+                    "(request_id, sort_order, name, config, estimated_hours, estimated_hours_max) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (req_id, sort_order, row['name'], row.get('config'),
+                     row.get('estimated_hours'), row.get('estimated_hours_max')))
             for sort_order, row in enumerate(cleaned_blocks['deliverables']):
                 conn.execute(
                     "INSERT INTO gpu_request_deliverables "
@@ -475,8 +478,9 @@ def request_new():
             for g_order, group in enumerate(vm_groups):
                 cur_g = conn.execute(
                     "INSERT INTO gpu_request_vm_groups "
-                    "(request_id, sort_order, name, summary) VALUES (?, ?, ?, ?)",
-                    (req_id, g_order, group['name'], group['summary']))
+                    "(request_id, sort_order, name, summary, notes) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (req_id, g_order, group['name'], group['summary'], group.get('notes')))
                 group_id = cur_g.lastrowid
                 for r_order, role in enumerate(group['roles']):
                     conn.execute(

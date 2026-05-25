@@ -107,6 +107,7 @@
         <button type="button" class="btn btn-ghost" data-add-block="networking"    data-kinds="new_infra,other">+ Networking</button>
         <button type="button" class="btn btn-ghost" data-add-block="access"        data-kinds="new_infra,other">+ Remote access</button>
         <button type="button" class="btn btn-ghost" data-add-block="relationship"  data-kinds="new_infra,gpu_allocation,compute_partnership,other">+ Relationship context</button>
+        <button type="button" class="btn btn-ghost" data-add-block="document"      data-kinds="new_infra,gpu_allocation,compute_partnership,other">+ Document / email metadata</button>
         <button type="button" class="btn btn-ghost" data-add-block="notes"         data-kinds="new_infra,gpu_allocation,compute_partnership,other">+ Notes</button>
     </div>
 
@@ -167,6 +168,8 @@
                     <input type="text" name="vm_groups[{{ loop.index0 }}][summary]" value="{{ g.summary or '' }}" placeholder="Summary (e.g. 30 VMs recommended)" class="input" style="flex:3">
                     <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove group">– group</button>
                 </div>
+                <textarea name="vm_groups[{{ loop.index0 }}][notes]" rows="2" class="input" style="margin-top:6px"
+                          placeholder="Group-level notes for variant data (e.g. PostgreSQL Databases Hosted: logto, agent_dns, ...; Redis Version 7.0, Eviction allkeys-lru)">{{ g.notes or '' }}</textarea>
                 <div data-vm-roles style="margin-top:8px;padding-left:12px;border-left:2px solid var(--border,#eee)">
                     {% for role in g.roles %}
                     <div data-vm-role data-role-index="{{ loop.index0 }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">
@@ -177,7 +180,7 @@
                         <input type="number" name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][disk_gb_per_vm]" value="{{ role.disk_gb_per_vm or '' }}" min="0" placeholder="Disk GB"  class="input" style="width:90px">
                         <input type="text"   name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][disk_type]"      value="{{ role.disk_type or '' }}"             placeholder="Disk type" class="input" style="width:90px">
                         <input type="text"   name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][os]"             value="{{ role.os or '' }}"                    placeholder="OS"        class="input" style="width:130px">
-                        <input type="text"   name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][notes]"          value="{{ role.notes or '' }}"                 placeholder="Notes"     class="input" style="flex:2;min-width:160px">
+                        <textarea           name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][notes]"          rows="1"                                       placeholder="Notes"     class="input" style="flex:2;min-width:160px;resize:vertical">{{ role.notes or '' }}</textarea>
                         <button type="button" class="btn btn-ghost" data-remove-vm-role aria-label="Remove role">–</button>
                     </div>
                     {% endfor %}
@@ -195,6 +198,8 @@
             <input type="text" name="vm_groups[__INDEX__][summary]" placeholder="Summary (e.g. 30 VMs recommended)" class="input" style="flex:3">
             <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove group">– group</button>
         </div>
+        <textarea name="vm_groups[__INDEX__][notes]" rows="2" class="input" style="margin-top:6px"
+                  placeholder="Group-level notes for variant data (e.g. PostgreSQL Databases Hosted: logto, agent_dns, ...; Redis Version 7.0, Eviction allkeys-lru)"></textarea>
         <div data-vm-roles style="margin-top:8px;padding-left:12px;border-left:2px solid var(--border,#eee)"></div>
         <button type="button" class="btn btn-ghost" data-add-vm-role style="margin-top:6px;font-size:0.85em">+ Add role to this group</button>
     </div></template>
@@ -206,7 +211,7 @@
         <input type="number" name="vm_groups[__GINDEX__][roles][__RINDEX__][disk_gb_per_vm]" min="0" placeholder="Disk GB"  class="input" style="width:90px">
         <input type="text"   name="vm_groups[__GINDEX__][roles][__RINDEX__][disk_type]"             placeholder="Disk type" class="input" style="width:90px">
         <input type="text"   name="vm_groups[__GINDEX__][roles][__RINDEX__][os]"                    placeholder="OS"        class="input" style="width:130px">
-        <input type="text"   name="vm_groups[__GINDEX__][roles][__RINDEX__][notes]"                 placeholder="Notes"     class="input" style="flex:2;min-width:160px">
+        <textarea           name="vm_groups[__GINDEX__][roles][__RINDEX__][notes]"                 rows="1" placeholder="Notes"     class="input" style="flex:2;min-width:160px;resize:vertical"></textarea>
         <button type="button" class="btn btn-ghost" data-remove-vm-role aria-label="Remove role">–</button>
     </div></template>
 
@@ -216,12 +221,17 @@
             <strong>Workloads</strong>
             <button type="button" class="btn btn-ghost" data-remove-block="workloads" style="font-size:0.85em">– remove section</button>
         </div>
+        <p class="muted" style="margin-top:4px;font-size:0.85em">
+            Hours are min/max — leave max blank for a single value. Real example
+            from ThakaaMed: "Chest IQ, 2048×2048 batch 8-16 4-GPU DDP, 200–300 hours".
+        </p>
         <div data-rows>
             {% for row in blocks.workloads %}
             <div data-row data-row-index="{{ loop.index0 }}" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                <input type="text" name="workloads[{{ loop.index0 }}][name]" value="{{ row.name or '' }}" placeholder="Workload name (e.g. Chest IQ)" class="input" style="flex:2">
-                <input type="text" name="workloads[{{ loop.index0 }}][config]" value="{{ row.config or '' }}" placeholder="Config (e.g. 1024×1024, batch 16, 4-GPU DDP)" class="input" style="flex:3">
-                <input type="number" name="workloads[{{ loop.index0 }}][estimated_hours]" value="{{ row.estimated_hours or '' }}" min="0" placeholder="Est. hours" class="input" style="flex:1">
+                <input type="text"   name="workloads[{{ loop.index0 }}][name]"                value="{{ row.name or '' }}"               placeholder="Workload name (e.g. Chest IQ)" class="input" style="flex:2">
+                <input type="text"   name="workloads[{{ loop.index0 }}][config]"              value="{{ row.config or '' }}"             placeholder="Config (e.g. 1024×1024, batch 16, 4-GPU DDP)" class="input" style="flex:3">
+                <input type="number" name="workloads[{{ loop.index0 }}][estimated_hours]"     value="{{ row.estimated_hours or '' }}"    min="0" placeholder="Hours min" class="input" style="width:100px">
+                <input type="number" name="workloads[{{ loop.index0 }}][estimated_hours_max]" value="{{ row.estimated_hours_max or '' }}" min="0" placeholder="Hours max" class="input" style="width:100px">
                 <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
             </div>
             {% endfor %}
@@ -229,9 +239,10 @@
         <button type="button" class="btn btn-ghost" data-add-row="workloads" style="margin-top:8px">+ Add row</button>
     </div>
     <template data-row-template="workloads"><div data-row data-row-index="__INDEX__" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-        <input type="text" name="workloads[__INDEX__][name]" placeholder="Workload name (e.g. Chest IQ)" class="input" style="flex:2">
-        <input type="text" name="workloads[__INDEX__][config]" placeholder="Config (e.g. 1024×1024, batch 16, 4-GPU DDP)" class="input" style="flex:3">
-        <input type="number" name="workloads[__INDEX__][estimated_hours]" min="0" placeholder="Est. hours" class="input" style="flex:1">
+        <input type="text"   name="workloads[__INDEX__][name]"                placeholder="Workload name (e.g. Chest IQ)" class="input" style="flex:2">
+        <input type="text"   name="workloads[__INDEX__][config]"              placeholder="Config (e.g. 1024×1024, batch 16, 4-GPU DDP)" class="input" style="flex:3">
+        <input type="number" name="workloads[__INDEX__][estimated_hours]"     min="0" placeholder="Hours min" class="input" style="width:100px">
+        <input type="number" name="workloads[__INDEX__][estimated_hours_max]" min="0" placeholder="Hours max" class="input" style="width:100px">
         <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
     </div></template>
 
@@ -386,6 +397,50 @@
         <div class="form-row">
             <label>Notes</label>
             <input type="text" name="fields[relationship][notes]" value="{{ rel.notes or '' }}" class="input" placeholder="Other context worth carrying with the request">
+        </div>
+    </div>
+
+    {# ── Document / email metadata (where this request came from) ─────────── #}
+    {% set dm = {} %}
+    {% for r in field_rows if r[0] == 'document' %}{% set _ = dm.update({r[1]: r[2]}) %}{% endfor %}
+    <div class="block-section" data-block-container="document" {% if not dm %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Document / email metadata</strong>
+            <button type="button" class="btn btn-ghost" data-remove-block="document" style="font-size:0.85em">– remove section</button>
+        </div>
+        <p class="muted" style="margin-top:4px;font-size:0.85em">
+            Provenance: which document / email this request was drafted from. Auto-filled by the AI extractor; humans can edit.
+            For PDFs: prepared for / prepared by / date. For emails: from / subject / sent.
+        </p>
+        <div class="form-row-group" style="margin-top:8px">
+            <div class="form-row" style="flex:1"><label>Document title</label>
+                <input type="text" name="fields[document][title]" value="{{ dm.title or '' }}" class="input" placeholder="e.g. GPU Resource Partnership Aramco SAIL × THAKAA MED"></div>
+            <div class="form-row" style="flex:1"><label>Document date</label>
+                <input type="text" name="fields[document][date]" value="{{ dm.date or '' }}" class="input" placeholder="e.g. January 2026"></div>
+        </div>
+        <div class="form-row-group">
+            <div class="form-row" style="flex:1"><label>Prepared for</label>
+                <input type="text" name="fields[document][prepared_for]" value="{{ dm.prepared_for or '' }}" class="input" placeholder="e.g. Aramco SAIL"></div>
+            <div class="form-row" style="flex:1"><label>Prepared by</label>
+                <input type="text" name="fields[document][prepared_by]" value="{{ dm.prepared_by or '' }}" class="input" placeholder="e.g. THAKAA MED"></div>
+        </div>
+        <hr style="border:0;border-top:1px dashed var(--border,#ddd);margin:12px 0">
+        <p class="muted" style="margin:0 0 6px 0;font-size:0.85em">— or, if the request came in by email —</p>
+        <div class="form-row-group">
+            <div class="form-row" style="flex:1"><label>From</label>
+                <input type="text" name="fields[document][email_from]" value="{{ dm.email_from or '' }}" class="input" placeholder="e.g. ali.alomairi@aramco.com"></div>
+            <div class="form-row" style="flex:1"><label>Subject</label>
+                <input type="text" name="fields[document][email_subject]" value="{{ dm.email_subject or '' }}" class="input" placeholder="e.g. KFUPM GPU Demand"></div>
+        </div>
+        <div class="form-row-group">
+            <div class="form-row" style="flex:1"><label>Sent</label>
+                <input type="text" name="fields[document][email_sent]" value="{{ dm.email_sent or '' }}" class="input" placeholder="e.g. 2026-04-15 12:07"></div>
+            <div class="form-row" style="flex:1"><label>Cc</label>
+                <input type="text" name="fields[document][email_cc]" value="{{ dm.email_cc or '' }}" class="input" placeholder="ibrahim.sowayigh@aramco.com; ..."></div>
+        </div>
+        <div class="form-row">
+            <label>Classification</label>
+            <input type="text" name="fields[document][classification]" value="{{ dm.classification or '' }}" class="input" placeholder="e.g. Saudi Aramco: Company General Use">
         </div>
     </div>
 

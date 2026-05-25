@@ -192,6 +192,7 @@ JSON shape:
     {{
       "name": "Kubernetes Cluster Nodes",
       "summary": "30 VMs recommended",
+      "notes": "group-level variant data the standard columns can't hold (e.g. PostgreSQL 'Databases Hosted: logto, agent_dns, ...' or Redis 'Version 7.0, Eviction allkeys-lru')",
       "roles": [
         {{"role_name": "Control Plane", "vm_count": 9, "vcpu_per_vm": 4,
           "ram_gb_per_vm": 16, "disk_gb_per_vm": 50,
@@ -212,16 +213,22 @@ JSON shape:
                  "service_account": "...", "notes": "..."}},
   "relationship": {{"wa_ed_investment": "...", "disai_2025": "...",
                    "program": "...", "notes": "..."}},
+  "document": {{"title": "...", "date": "...",
+               "prepared_for": "...", "prepared_by": "..."}},
   "confidence": 0.0-1.0
 }}
 
 Rules:
 - vm_groups: every group/role with specs in the doc — leave fields null if absent.
+  Put variant per-group data (PG databases, Redis version, eviction policy)
+  into the group's notes string.
 - gpu_options: every GPU option listed (they are alternatives, include all).
   In BYOC briefs each GPU row is a full host spec — capture use_case_label
   and host_vcpu/host_ram_gb/host_disk_gb/host_os when the doc gives them.
 - networking / access / relationship: only include keys the doc actually
   mentions; empty object if none.
+- document: provenance — fill in title/date/prepared_for/prepared_by when
+  the document carries them (cover page, footer, etc.).
 - Be terse. Do not invent fields.
 """,
 
@@ -240,6 +247,9 @@ JSON shape:
     {{"model_name": "NVIDIA A100", "vram_gb": 40,
       "gpu_count": 2, "gpu_count_max": 8}}
   ],
+  "document": {{"email_from": "...", "email_subject": "...",
+               "email_sent": "...", "email_cc": "...",
+               "classification": "..."}},
   "notes": "anything else worth capturing",
   "confidence": 0.0-1.0
 }}
@@ -248,6 +258,9 @@ Rules:
 - gpu_options: every GPU model listed, in order.
 - If the doc says a range like "2 per module, up to 8", set gpu_count=2 and gpu_count_max=8.
 - If the doc gives a single count, set gpu_count to it and leave gpu_count_max null.
+- For emails: populate the document section with From / Subject / Sent /
+  Cc / Classification headers when present (e.g. "Saudi Aramco: Company
+  General Use" classification footer).
 """,
 
     "compute_partnership": """Extract the compute-partnership request below into JSON. Return JSON only.
@@ -266,7 +279,7 @@ JSON shape:
   "duration_text": "e.g. '12 months (renewable)' or null",
   "workloads": [
     {{"name": "Chest IQ", "config": "2048x2048, batch 8-16, 4-GPU DDP",
-      "estimated_hours": 300}}
+      "estimated_hours": 200, "estimated_hours_max": 300}}
   ],
   "phases": [
     {{"name": "Phase 1: Infrastructure Setup",
@@ -278,15 +291,21 @@ JSON shape:
   ],
   "relationship": {{"wa_ed_investment": "...", "disai_2025": "...",
                    "program": "...", "notes": "..."}},
+  "document": {{"title": "...", "date": "...",
+               "prepared_for": "...", "prepared_by": "..."}},
   "confidence": 0.0-1.0
 }}
 
 Rules:
 - workloads: each workload row in the doc — keep config as the doc wrote it.
+  Hours are min/max: "200-300 hours" -> estimated_hours=200, estimated_hours_max=300.
+  Single value -> estimated_hours=value, estimated_hours_max=null.
 - phases: each phase / milestone with its target date.
 - contributions: things the REQUESTER provides back to SAIL (cluster config,
   knowledge transfer, documentation, etc.).
 - relationship: include only keys the doc mentions; empty object if none.
+- document: provenance — title / date / prepared_for / prepared_by from the
+  cover page or footer of the proposal.
 - If the doc gives a target hours like "1,000-2,000 GPU-hours" use the midpoint
   or upper bound as requested_hours and put the full range in notes (later
   reviewers can adjust).
@@ -405,15 +424,20 @@ def persist_request(extracted: dict, kind: str, confidence: float,
                  _as_str(opt.get("host_os"))),
             )
 
-        # vm_groups -> gpu_request_vm_groups + gpu_request_vm_roles (new_infra)
+        # vm_groups -> gpu_request_vm_groups + gpu_request_vm_roles (new_infra).
+        # Group-level `notes` holds variant data the role columns can't carry
+        # (PostgreSQL "Databases Hosted", Redis Version/Eviction Policy, ...).
         for gi, group in enumerate(extracted.get("vm_groups") or []):
             gname = _as_str(group.get("name"))
             if not gname:
                 continue
             cur_g = conn.execute(
                 "INSERT INTO gpu_request_vm_groups "
-                "(request_id, sort_order, name, summary) VALUES (?, ?, ?, ?)",
-                (req_id, gi, gname, _as_str(group.get("summary"))),
+                "(request_id, sort_order, name, summary, notes) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (req_id, gi, gname,
+                 _as_str(group.get("summary")),
+                 _as_str(group.get("notes"))),
             )
             group_id = cur_g.lastrowid
             for ri, role in enumerate(group.get("roles") or []):
@@ -442,10 +466,12 @@ def persist_request(extracted: dict, kind: str, confidence: float,
                 continue
             conn.execute(
                 "INSERT INTO gpu_request_workloads "
-                "(request_id, sort_order, name, config, estimated_hours) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "(request_id, sort_order, name, config, "
+                " estimated_hours, estimated_hours_max) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (req_id, i, name, _as_str(w.get("config")),
-                 _as_int(w.get("estimated_hours"))),
+                 _as_int(w.get("estimated_hours")),
+                 _as_int(w.get("estimated_hours_max"))),
             )
         for i, p in enumerate(extracted.get("phases") or []):
             name = _as_str(p.get("name"))

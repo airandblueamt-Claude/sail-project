@@ -118,16 +118,18 @@
     // Blocks that have no rows (notes, networking, access) just hide; we
     // don't blow away their inputs because the user might re-open the
     // section and expect their data back.
-    const ROWLESS_BLOCKS = new Set(['notes', 'networking', 'access', 'relationship']);
+    const ROWLESS_BLOCKS = new Set(['notes', 'networking', 'access', 'relationship', 'document']);
 
     // For each kind, which sections to auto-reveal on first selection. The
     // user can still + Add anything else, and can remove these. Picked from
     // the dominant shape of each real sample doc — see docs/samples/.
+    // Document metadata is auto-opened for every kind because every request
+    // comes from a doc / email and the provenance is always worth recording.
     const KIND_AUTOEXPAND = {
-        new_infra:           ['vm_groups', 'models', 'networking', 'access'],
-        gpu_allocation:      ['models'],
-        compute_partnership: ['models', 'workloads', 'phases', 'contributions'],
-        other:               [],
+        new_infra:           ['vm_groups', 'models', 'networking', 'access', 'document'],
+        gpu_allocation:      ['models', 'document'],
+        compute_partnership: ['models', 'workloads', 'phases', 'contributions', 'document'],
+        other:               ['document'],
     };
     // Track which kinds the user has visited so we only auto-expand the
     // first time they select each one. Otherwise re-selecting a kind they
