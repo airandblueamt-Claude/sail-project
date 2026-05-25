@@ -155,9 +155,11 @@ CREATE TABLE IF NOT EXISTS tickets (
     affected_user_name  TEXT,
     affected_user_email TEXT,
     issue_category_id   INTEGER REFERENCES issue_categories(id),
+    gpu_request_id      INTEGER REFERENCES gpu_requests(id),  -- link maintenance tickets to a GPU/BYOC request
     created_at          TEXT DEFAULT (datetime('now')),
     updated_at          TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_tickets_gpu_request ON tickets(gpu_request_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_number   ON tickets(ticket_number);
 CREATE INDEX IF NOT EXISTS idx_tickets_asset    ON tickets(asset_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_status   ON tickets(status);
@@ -211,43 +213,117 @@ CREATE TABLE IF NOT EXISTS gpu_assets (
 CREATE INDEX IF NOT EXISTS idx_gpu_assets_parent ON gpu_assets(parent_asset_id);
 CREATE INDEX IF NOT EXISTS idx_gpu_assets_kind   ON gpu_assets(kind);
 
+-- ── GPU/BYOC requests ──────────────────────────────────────────────────────
+-- Schema supports three request kinds, all sharing this header:
+--   new_infra            — BYOC infrastructure brief: VM groups + optional
+--                          GPU block + networking + remote-access
+--                          requirements.
+--   gpu_allocation       — short GPU-models list with count/range; no VM
+--                          groups or networking.
+--   compute_partnership  — time on existing infra: workloads + phases +
+--                          what the requester provides back to SAIL.
+-- request_kind drives which sections the UI renders; all child tables are
+-- optional regardless of kind.
+
 CREATE TABLE IF NOT EXISTS gpu_requests (
-    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_number       TEXT NOT NULL UNIQUE,       -- 'GPU-2026-0001'
-    title                TEXT NOT NULL,
-    use_case             TEXT,
-    requester_id         INTEGER REFERENCES employees(id),
-    requester_name       TEXT,
-    requester_email      TEXT,
-    requester_org        TEXT,
-    requester_type       TEXT DEFAULT 'internal'
-                         CHECK(requester_type IN ('internal','partner','academic','vendor')),
-    requested_hours      INTEGER,
-    start_date           TEXT,
-    end_date             TEXT,
-    duration_text        TEXT,                       -- free-text e.g. "12 months (renewable)"
-    notes                TEXT,
-    decision             TEXT,                       -- approved / approved_with_conditions / rejected
-    fit_notes            TEXT,
-    response_notes       TEXT,
-    allocated_asset_tags TEXT,                       -- comma-separated tags from gpu_assets
-    decided_by           INTEGER REFERENCES employees(id),
-    decided_at           TEXT,                       -- NULL = open
-    created_at           TEXT DEFAULT (datetime('now')),
-    updated_at           TEXT DEFAULT (datetime('now'))
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_number        TEXT NOT NULL UNIQUE,       -- 'GPU-2026-0001'
+    request_kind          TEXT
+                          CHECK(request_kind IN ('new_infra','gpu_allocation','compute_partnership','other')),
+    title                 TEXT NOT NULL,
+    use_case              TEXT,
+    requester_id          INTEGER REFERENCES employees(id),
+    requester_name        TEXT,
+    requester_email       TEXT,
+    requester_org         TEXT,
+    requester_type        TEXT DEFAULT 'internal'
+                          CHECK(requester_type IN ('internal','partner','academic','vendor')),
+    requested_hours       INTEGER,
+    start_date            TEXT,
+    end_date              TEXT,
+    duration_text         TEXT,                       -- free-text e.g. "12 months (renewable)"
+    existing_resource_ref TEXT,                       -- e.g. "use the 4x A40 SAIL already owns" — compute_partnership only
+    notes                 TEXT,
+    decision              TEXT,                       -- approved / approved_with_conditions / rejected
+    fit_notes             TEXT,
+    response_notes        TEXT,
+    allocated_asset_tags  TEXT,                       -- comma-separated tags from gpu_assets
+    decided_by            INTEGER REFERENCES employees(id),
+    decided_at            TEXT,                       -- NULL = open
+    source                TEXT NOT NULL DEFAULT 'manual'
+                          CHECK(source IN ('manual','agent','imported')),
+    agent_confidence      REAL,                       -- 0.0-1.0 when source='agent'
+    raw_extraction_json   TEXT,                       -- audit trail of the LLM extraction
+    created_at            TEXT DEFAULT (datetime('now')),
+    updated_at            TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_gpu_requests_decided   ON gpu_requests(decided_at);
 CREATE INDEX IF NOT EXISTS idx_gpu_requests_requester ON gpu_requests(requester_id);
+CREATE INDEX IF NOT EXISTS idx_gpu_requests_kind      ON gpu_requests(request_kind);
 
 CREATE TABLE IF NOT EXISTS gpu_request_models (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id    INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order    INTEGER DEFAULT 0,
+    model_name    TEXT NOT NULL,
+    vram_gb       INTEGER,
+    gpu_count     INTEGER,                            -- treat as min if gpu_count_max is set
+    gpu_count_max INTEGER                             -- nullable; e.g. "2 per module, up to 8" -> 2/8
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_models_req ON gpu_request_models(request_id);
+
+-- VM groups (new_infra only) — one row per group ("Kubernetes Cluster
+-- Nodes", "PostgreSQL", "Redis"...). Each group has many vm_roles below.
+CREATE TABLE IF NOT EXISTS gpu_request_vm_groups (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id  INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
     sort_order  INTEGER DEFAULT 0,
-    model_name  TEXT NOT NULL,
-    vram_gb     INTEGER,
-    gpu_count   INTEGER
+    name        TEXT NOT NULL,                        -- "Kubernetes Cluster Nodes"
+    summary     TEXT                                  -- "30 VMs recommended"
 );
-CREATE INDEX IF NOT EXISTS idx_gpu_request_models_req ON gpu_request_models(request_id);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_vm_groups_req ON gpu_request_vm_groups(request_id);
+
+-- VM roles within a group — per-role spec (Control Plane, Execution, ...).
+CREATE TABLE IF NOT EXISTS gpu_request_vm_roles (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id        INTEGER NOT NULL REFERENCES gpu_request_vm_groups(id) ON DELETE CASCADE,
+    sort_order      INTEGER DEFAULT 0,
+    role_name       TEXT NOT NULL,
+    vm_count        INTEGER,
+    vcpu_per_vm     INTEGER,
+    ram_gb_per_vm   INTEGER,
+    disk_gb_per_vm  INTEGER,
+    disk_type       TEXT,                             -- 'SSD' / 'NVMe'
+    os              TEXT,                             -- 'Ubuntu 24.04 LTS'
+    notes           TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_vm_roles_group ON gpu_request_vm_roles(group_id);
+
+-- Inverse of "what we provide" — what the requester offers back (used by
+-- partnership-style requests like ThakaaMed: ClearML setup, knowledge
+-- transfer, documentation...).
+CREATE TABLE IF NOT EXISTS gpu_request_contributions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id  INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order  INTEGER DEFAULT 0,
+    name        TEXT NOT NULL,                        -- "ClearML Integration"
+    description TEXT,
+    benefit     TEXT                                  -- "Automated resource optimization"
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_contributions_req ON gpu_request_contributions(request_id);
+
+-- Generic section/key/value bucket for the long tail — networking,
+-- remote-access, relationship context (Wa'ed, DISAI 2025), and anything
+-- a future request shape introduces that doesn't merit a typed column.
+CREATE TABLE IF NOT EXISTS gpu_request_fields (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id  INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    section     TEXT NOT NULL,                        -- 'networking' | 'access' | 'relationship' | 'custom'
+    key         TEXT NOT NULL,                        -- 'subnet' | 'wa_ed_investment' | ...
+    value       TEXT,
+    UNIQUE(request_id, section, key)
+);
+CREATE INDEX IF NOT EXISTS idx_gpu_request_fields_req ON gpu_request_fields(request_id);
 
 CREATE TABLE IF NOT EXISTS gpu_request_workloads (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
