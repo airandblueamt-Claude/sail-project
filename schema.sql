@@ -261,14 +261,23 @@ CREATE INDEX IF NOT EXISTS idx_gpu_requests_decided   ON gpu_requests(decided_at
 CREATE INDEX IF NOT EXISTS idx_gpu_requests_requester ON gpu_requests(requester_id);
 CREATE INDEX IF NOT EXISTS idx_gpu_requests_kind      ON gpu_requests(request_kind);
 
+-- A "GPU option" is more than a card spec: in BYOC briefs (e.g. OrbitronAI)
+-- each row is a full GPU-host configuration with vCPU/RAM/disk/OS plus a
+-- use-case label ("Up to 14B FP16"). All host-side columns are nullable so
+-- short-list shapes (e.g. KFUPM email) work without them.
 CREATE TABLE IF NOT EXISTS gpu_request_models (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_id    INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
-    sort_order    INTEGER DEFAULT 0,
-    model_name    TEXT NOT NULL,
-    vram_gb       INTEGER,
-    gpu_count     INTEGER,                            -- treat as min if gpu_count_max is set
-    gpu_count_max INTEGER                             -- nullable; e.g. "2 per module, up to 8" -> 2/8
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id      INTEGER NOT NULL REFERENCES gpu_requests(id) ON DELETE CASCADE,
+    sort_order      INTEGER DEFAULT 0,
+    use_case_label  TEXT,                               -- e.g. "Up to 14B FP16", "70B FP16 / on-prem best value"
+    model_name      TEXT NOT NULL,
+    vram_gb         INTEGER,
+    gpu_count       INTEGER,                            -- treat as min if gpu_count_max is set
+    gpu_count_max   INTEGER,                            -- nullable; e.g. "2 per module, up to 8" -> 2/8
+    host_vcpu       INTEGER,                            -- vCPU on the GPU node (not the card)
+    host_ram_gb     INTEGER,                            -- RAM on the GPU node
+    host_disk_gb    INTEGER,                            -- disk on the GPU node
+    host_os         TEXT                                -- e.g. "Ubuntu 24.04 LTS"
 );
 CREATE INDEX IF NOT EXISTS idx_gpu_request_models_req ON gpu_request_models(request_id);
 

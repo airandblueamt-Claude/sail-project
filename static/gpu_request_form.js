@@ -118,7 +118,21 @@
     // Blocks that have no rows (notes, networking, access) just hide; we
     // don't blow away their inputs because the user might re-open the
     // section and expect their data back.
-    const ROWLESS_BLOCKS = new Set(['notes', 'networking', 'access']);
+    const ROWLESS_BLOCKS = new Set(['notes', 'networking', 'access', 'relationship']);
+
+    // For each kind, which sections to auto-reveal on first selection. The
+    // user can still + Add anything else, and can remove these. Picked from
+    // the dominant shape of each real sample doc — see docs/samples/.
+    const KIND_AUTOEXPAND = {
+        new_infra:           ['vm_groups', 'models', 'networking', 'access'],
+        gpu_allocation:      ['models'],
+        compute_partnership: ['models', 'workloads', 'phases', 'contributions'],
+        other:               [],
+    };
+    // Track which kinds the user has visited so we only auto-expand the
+    // first time they select each one. Otherwise re-selecting a kind they
+    // already touched would resurrect sections they explicitly removed.
+    const autoExpandedFor = new Set();
 
     function hideBlock(block) {
         const container = document.querySelector(`[data-block-container="${block}"]`);
@@ -149,10 +163,41 @@
             el.style.display = visible ? '' : 'none';
         });
     }
+
+    function autoExpandForKind(kind) {
+        if (!kind || autoExpandedFor.has(kind)) return;
+        autoExpandedFor.add(kind);
+        const sections = KIND_AUTOEXPAND[kind] || [];
+        sections.forEach(block => {
+            const container = document.querySelector(`[data-block-container="${block}"]`);
+            if (!container) return;
+            // Only auto-expand if the section is currently hidden and empty.
+            // Don't blow away rows the user already filled in.
+            if (!container.hasAttribute('hidden')) return;
+            const rowsHost = container.querySelector('[data-rows]') || container;
+            if (rowsHost.querySelector(':scope > [data-row]')) return;
+            showBlock(block);
+            if (!ROWLESS_BLOCKS.has(block)) {
+                addRow(block);
+                if (block === 'vm_groups') {
+                    const lastGroup = rowsHost.querySelector(':scope > [data-vm-group]:last-of-type');
+                    if (lastGroup) addVmRole(lastGroup);
+                }
+            }
+        });
+    }
+
     const kindSelect = document.querySelector('[data-kind-select]');
     if (kindSelect) {
-        kindSelect.addEventListener('change', applyKindVisibility);
+        kindSelect.addEventListener('change', () => {
+            applyKindVisibility();
+            autoExpandForKind(kindSelect.value);
+        });
         applyKindVisibility();
+        // On first load, if a kind is already pre-selected (e.g. after a
+        // failed POST), seed it as "already expanded" so we don't add empty
+        // sections on top of the user's existing data.
+        if (kindSelect.value) autoExpandedFor.add(kindSelect.value);
     }
 
     // ── Single delegated click handler ─────────────────────────────────────

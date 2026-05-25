@@ -106,6 +106,7 @@
         <button type="button" class="btn btn-ghost" data-add-block="deliverables"  data-kinds="new_infra,compute_partnership,other">+ Partner deliverables</button>
         <button type="button" class="btn btn-ghost" data-add-block="networking"    data-kinds="new_infra,other">+ Networking</button>
         <button type="button" class="btn btn-ghost" data-add-block="access"        data-kinds="new_infra,other">+ Remote access</button>
+        <button type="button" class="btn btn-ghost" data-add-block="relationship"  data-kinds="new_infra,gpu_allocation,compute_partnership,other">+ Relationship context</button>
         <button type="button" class="btn btn-ghost" data-add-block="notes"         data-kinds="new_infra,gpu_allocation,compute_partnership,other">+ Notes</button>
     </div>
 
@@ -115,25 +116,39 @@
             <strong>GPU options</strong>
             <button type="button" class="btn btn-ghost" data-remove-block="models" style="font-size:0.85em">– remove section</button>
         </div>
-        <p class="muted" style="margin-top:4px;font-size:0.85em">If the requester gave a count range (e.g. "2 per module, up to 8"), put 2 in min and 8 in max.</p>
+        <p class="muted" style="margin-top:4px;font-size:0.85em">
+            One row per GPU model the requester listed — they are alternatives, include all of them.
+            For BYOC briefs each row is a full host config (vCPU/RAM/disk/OS on the GPU node).
+            For short lists (e.g. "2 per module, up to 8") just fill min &amp; max count.
+        </p>
         <div data-rows>
             {% for row in blocks.models %}
-            <div data-row data-row-index="{{ loop.index0 }}" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                <input type="text"   name="models[{{ loop.index0 }}][model_name]"    value="{{ row.model_name or '' }}" placeholder="Model name (e.g. NVIDIA A100)" class="input" style="flex:2">
-                <input type="number" name="models[{{ loop.index0 }}][vram_gb]"       value="{{ row.vram_gb or '' }}"    min="0" placeholder="VRAM GB"  class="input" style="flex:1">
-                <input type="number" name="models[{{ loop.index0 }}][gpu_count]"     value="{{ row.gpu_count or '' }}"  min="0" placeholder="Count min" class="input" style="flex:1">
-                <input type="number" name="models[{{ loop.index0 }}][gpu_count_max]" value="{{ row.gpu_count_max or '' }}" min="0" placeholder="Count max" class="input" style="flex:1">
+            <div data-row data-row-index="{{ loop.index0 }}" class="block-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding-bottom:6px;border-bottom:1px dashed var(--border,#eee)">
+                <input type="text"   name="models[{{ loop.index0 }}][use_case_label]" value="{{ row.use_case_label or '' }}"      placeholder="Use case label (e.g. Up to 14B FP16)" class="input" style="flex:2;min-width:180px">
+                <input type="text"   name="models[{{ loop.index0 }}][model_name]"     value="{{ row.model_name or '' }}"          placeholder="GPU model (e.g. NVIDIA A100 80GB)" class="input" style="flex:2;min-width:180px">
+                <input type="number" name="models[{{ loop.index0 }}][vram_gb]"        value="{{ row.vram_gb or '' }}"             min="0" placeholder="VRAM GB"   class="input" style="width:90px">
+                <input type="number" name="models[{{ loop.index0 }}][gpu_count]"      value="{{ row.gpu_count or '' }}"           min="0" placeholder="Count min" class="input" style="width:90px">
+                <input type="number" name="models[{{ loop.index0 }}][gpu_count_max]"  value="{{ row.gpu_count_max or '' }}"       min="0" placeholder="Count max" class="input" style="width:90px">
+                <input type="number" name="models[{{ loop.index0 }}][host_vcpu]"      value="{{ row.host_vcpu or '' }}"           min="0" placeholder="Host vCPU" class="input" style="width:100px">
+                <input type="number" name="models[{{ loop.index0 }}][host_ram_gb]"    value="{{ row.host_ram_gb or '' }}"         min="0" placeholder="Host RAM GB" class="input" style="width:110px">
+                <input type="number" name="models[{{ loop.index0 }}][host_disk_gb]"   value="{{ row.host_disk_gb or '' }}"        min="0" placeholder="Host disk GB" class="input" style="width:110px">
+                <input type="text"   name="models[{{ loop.index0 }}][host_os]"        value="{{ row.host_os or '' }}"             placeholder="Host OS" class="input" style="width:150px">
                 <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
             </div>
             {% endfor %}
         </div>
         <button type="button" class="btn btn-ghost" data-add-row="models" style="margin-top:8px">+ Add row</button>
     </div>
-    <template data-row-template="models"><div data-row data-row-index="__INDEX__" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-        <input type="text"   name="models[__INDEX__][model_name]"    placeholder="Model name (e.g. NVIDIA A100)" class="input" style="flex:2">
-        <input type="number" name="models[__INDEX__][vram_gb]"       min="0" placeholder="VRAM GB"  class="input" style="flex:1">
-        <input type="number" name="models[__INDEX__][gpu_count]"     min="0" placeholder="Count min" class="input" style="flex:1">
-        <input type="number" name="models[__INDEX__][gpu_count_max]" min="0" placeholder="Count max" class="input" style="flex:1">
+    <template data-row-template="models"><div data-row data-row-index="__INDEX__" class="block-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding-bottom:6px;border-bottom:1px dashed var(--border,#eee)">
+        <input type="text"   name="models[__INDEX__][use_case_label]" placeholder="Use case label (e.g. Up to 14B FP16)" class="input" style="flex:2;min-width:180px">
+        <input type="text"   name="models[__INDEX__][model_name]"     placeholder="GPU model (e.g. NVIDIA A100 80GB)" class="input" style="flex:2;min-width:180px">
+        <input type="number" name="models[__INDEX__][vram_gb]"        min="0" placeholder="VRAM GB"   class="input" style="width:90px">
+        <input type="number" name="models[__INDEX__][gpu_count]"      min="0" placeholder="Count min" class="input" style="width:90px">
+        <input type="number" name="models[__INDEX__][gpu_count_max]"  min="0" placeholder="Count max" class="input" style="width:90px">
+        <input type="number" name="models[__INDEX__][host_vcpu]"      min="0" placeholder="Host vCPU" class="input" style="width:100px">
+        <input type="number" name="models[__INDEX__][host_ram_gb]"    min="0" placeholder="Host RAM GB" class="input" style="width:110px">
+        <input type="number" name="models[__INDEX__][host_disk_gb]"   min="0" placeholder="Host disk GB" class="input" style="width:110px">
+        <input type="text"   name="models[__INDEX__][host_os]"        placeholder="Host OS" class="input" style="width:150px">
         <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
     </div></template>
 
@@ -343,6 +358,34 @@
         <div class="form-row">
             <label>Notes</label>
             <input type="text" name="fields[access][notes]" value="{{ ax.notes or '' }}" class="input" placeholder="Anything else about access">
+        </div>
+    </div>
+
+    {# ── Relationship context (Wa'ed investment, DISAI 2025, etc.) ────────── #}
+    {% set rel = {} %}
+    {% for r in field_rows if r[0] == 'relationship' %}{% set _ = rel.update({r[1]: r[2]}) %}{% endfor %}
+    <div class="block-section" data-block-container="relationship" {% if not rel %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Relationship context</strong>
+            <button type="button" class="btn btn-ghost" data-remove-block="relationship" style="font-size:0.85em">– remove section</button>
+        </div>
+        <p class="muted" style="margin-top:4px;font-size:0.85em">
+            How does the requester relate to Aramco / SAIL? Helps reviewers weigh the request.
+            Examples from real briefs: Wa'ed investment status, DISAI 2025 finalist, prior partnership.
+        </p>
+        <div class="form-row-group" style="margin-top:8px">
+            <div class="form-row" style="flex:1"><label>Wa'ed investment</label>
+                <input type="text" name="fields[relationship][wa_ed_investment]" value="{{ rel.wa_ed_investment or '' }}" class="input" placeholder="e.g. Active, Aramco's venture arm investing in THAKAA MED"></div>
+            <div class="form-row" style="flex:1"><label>DISAI 2025</label>
+                <input type="text" name="fields[relationship][disai_2025]" value="{{ rel.disai_2025 or '' }}" class="input" placeholder="e.g. Finalist, Aramco SAIL × Qualcomm accelerator program"></div>
+        </div>
+        <div class="form-row">
+            <label>Program / partnership</label>
+            <input type="text" name="fields[relationship][program]" value="{{ rel.program or '' }}" class="input" placeholder="e.g. Strategic Partnership, Wa'ed portfolio company, NEOM track, ...">
+        </div>
+        <div class="form-row">
+            <label>Notes</label>
+            <input type="text" name="fields[relationship][notes]" value="{{ rel.notes or '' }}" class="input" placeholder="Other context worth carrying with the request">
         </div>
     </div>
 

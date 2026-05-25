@@ -66,13 +66,29 @@
 </div>
 
 {% if models %}
+{# Hide host-spec columns when no row has any of them (e.g. KFUPM-style short lists). #}
+{% set has_host_specs = models | selectattr('host_vcpu') | list or models | selectattr('host_ram_gb') | list or models | selectattr('host_disk_gb') | list or models | selectattr('host_os') | list or models | selectattr('use_case_label') | list %}
 <div class="detail-card" style="margin-top:16px">
     <h4>GPU options ({{ models|length }})</h4>
     <table class="data-table">
-        <thead><tr><th>Model</th><th>VRAM</th><th>Count</th></tr></thead>
+        <thead>
+            <tr>
+                {% if has_host_specs %}<th>Use case</th>{% endif %}
+                <th>Model</th>
+                <th>VRAM</th>
+                <th class="num">Count</th>
+                {% if has_host_specs %}
+                <th class="num">Host vCPU</th>
+                <th class="num">Host RAM</th>
+                <th class="num">Host disk</th>
+                <th>Host OS</th>
+                {% endif %}
+            </tr>
+        </thead>
         <tbody>
             {% for m in models %}
             <tr>
+                {% if has_host_specs %}<td>{{ m.use_case_label or '—' }}</td>{% endif %}
                 <td>{{ m.model_name }}</td>
                 <td>{{ m.vram_gb ~ ' GB' if m.vram_gb else '—' }}</td>
                 <td class="num">
@@ -82,6 +98,12 @@
                         {{ m.gpu_count }}
                     {% else %}—{% endif %}
                 </td>
+                {% if has_host_specs %}
+                <td class="num">{{ m.host_vcpu or '—' }}</td>
+                <td class="num">{{ (m.host_ram_gb ~ ' GB') if m.host_ram_gb else '—' }}</td>
+                <td class="num">{{ (m.host_disk_gb ~ ' GB') if m.host_disk_gb else '—' }}</td>
+                <td>{{ m.host_os or '—' }}</td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>

@@ -200,20 +200,28 @@ JSON shape:
     }}
   ],
   "gpu_options": [
-    {{"model_name": "NVIDIA A100 80GB", "vram_gb": 80,
-      "gpu_count": 1, "gpu_count_max": null}}
+    {{"use_case_label": "Up to 14B FP16",
+      "model_name": "NVIDIA L4", "vram_gb": 24,
+      "gpu_count": 1, "gpu_count_max": null,
+      "host_vcpu": 16, "host_ram_gb": 64, "host_disk_gb": 1000,
+      "host_os": "Ubuntu 24.04 LTS"}}
   ],
   "networking": {{"subnet": "...", "static_ip": "...", "dns": "...",
                  "tls": "...", "outbound": "...", "notes": "..."}},
   "access":     {{"ssh_vpn": "...", "bastion": "...",
                  "service_account": "...", "notes": "..."}},
+  "relationship": {{"wa_ed_investment": "...", "disai_2025": "...",
+                   "program": "...", "notes": "..."}},
   "confidence": 0.0-1.0
 }}
 
 Rules:
 - vm_groups: every group/role with specs in the doc — leave fields null if absent.
 - gpu_options: every GPU option listed (they are alternatives, include all).
-- networking / access: only include keys the doc actually mentions; empty object if none.
+  In BYOC briefs each GPU row is a full host spec — capture use_case_label
+  and host_vcpu/host_ram_gb/host_disk_gb/host_os when the doc gives them.
+- networking / access / relationship: only include keys the doc actually
+  mentions; empty object if none.
 - Be terse. Do not invent fields.
 """,
 
@@ -268,6 +276,8 @@ JSON shape:
     {{"name": "ClearML Integration", "description": "Job scheduling/monitoring",
       "benefit": "Automated resource optimization"}}
   ],
+  "relationship": {{"wa_ed_investment": "...", "disai_2025": "...",
+                   "program": "...", "notes": "..."}},
   "confidence": 0.0-1.0
 }}
 
@@ -276,6 +286,7 @@ Rules:
 - phases: each phase / milestone with its target date.
 - contributions: things the REQUESTER provides back to SAIL (cluster config,
   knowledge transfer, documentation, etc.).
+- relationship: include only keys the doc mentions; empty object if none.
 - If the doc gives a target hours like "1,000-2,000 GPU-hours" use the midpoint
   or upper bound as requested_hours and put the full range in notes (later
   reviewers can adjust).
@@ -373,16 +384,25 @@ def persist_request(extracted: dict, kind: str, confidence: float,
         )
         req_id = cur.lastrowid
 
-        # gpu_options -> gpu_request_models (used by new_infra + gpu_allocation)
+        # gpu_options -> gpu_request_models (used by new_infra + gpu_allocation).
+        # In BYOC briefs each row carries full host spec (vCPU/RAM/disk/OS)
+        # plus a use_case_label; KFUPM-style short lists leave those null.
         for i, opt in enumerate(extracted.get("gpu_options") or []):
             conn.execute(
                 "INSERT INTO gpu_request_models "
-                "(request_id, sort_order, model_name, vram_gb, gpu_count, gpu_count_max) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (req_id, i, _as_str(opt.get("model_name")) or "Unknown",
+                "(request_id, sort_order, use_case_label, model_name, vram_gb, "
+                " gpu_count, gpu_count_max, host_vcpu, host_ram_gb, host_disk_gb, host_os) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (req_id, i,
+                 _as_str(opt.get("use_case_label")),
+                 _as_str(opt.get("model_name")) or "Unknown",
                  _as_int(opt.get("vram_gb")),
                  _as_int(opt.get("gpu_count")),
-                 _as_int(opt.get("gpu_count_max"))),
+                 _as_int(opt.get("gpu_count_max")),
+                 _as_int(opt.get("host_vcpu")),
+                 _as_int(opt.get("host_ram_gb")),
+                 _as_int(opt.get("host_disk_gb")),
+                 _as_str(opt.get("host_os"))),
             )
 
         # vm_groups -> gpu_request_vm_groups + gpu_request_vm_roles (new_infra)
@@ -450,8 +470,8 @@ def persist_request(extracted: dict, kind: str, confidence: float,
                  _as_str(c.get("benefit"))),
             )
 
-        # networking / access -> gpu_request_fields
-        for section in ("networking", "access"):
+        # networking / access / relationship / document -> gpu_request_fields
+        for section in ("networking", "access", "relationship", "document"):
             block = extracted.get(section) or {}
             if isinstance(block, dict):
                 for k, v in block.items():

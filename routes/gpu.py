@@ -39,7 +39,10 @@ BLOCK_NAMES = ('models', 'workloads', 'deliverables', 'phases', 'contributions')
 # row to count; rows where every required field is empty are silently dropped.
 BLOCK_FIELDS = {
     'models':        {'required': ('model_name',),
-                      'optional': ('vram_gb', 'gpu_count', 'gpu_count_max')},
+                      'optional': ('use_case_label', 'vram_gb',
+                                   'gpu_count', 'gpu_count_max',
+                                   'host_vcpu', 'host_ram_gb',
+                                   'host_disk_gb', 'host_os')},
     'workloads':     {'required': ('name',),
                       'optional': ('config', 'estimated_hours')},
     'deliverables':  {'required': ('description',),
@@ -49,13 +52,14 @@ BLOCK_FIELDS = {
     'contributions': {'required': ('name',),
                       'optional': ('description', 'benefit')},
 }
-INT_FIELDS = {'vram_gb', 'gpu_count', 'gpu_count_max', 'estimated_hours'}
+INT_FIELDS = {'vram_gb', 'gpu_count', 'gpu_count_max', 'estimated_hours',
+              'host_vcpu', 'host_ram_gb', 'host_disk_gb'}
 
 # Sections persisted into gpu_request_fields. The keys listed are what the
 # template renders as labelled inputs; extra section/key pairs from the
 # extractor are accepted on POST too (the template just doesn't surface
 # them yet).
-FIELD_SECTIONS = ('networking', 'access', 'relationship')
+FIELD_SECTIONS = ('networking', 'access', 'relationship', 'document')
 
 # VM-role columns (per-role spec under each VM group).
 VM_ROLE_FIELDS = ('role_name', 'vm_count', 'vcpu_per_vm', 'ram_gb_per_vm',
@@ -435,10 +439,15 @@ def request_new():
             for sort_order, row in enumerate(cleaned_blocks['models']):
                 conn.execute(
                     "INSERT INTO gpu_request_models "
-                    "(request_id, sort_order, model_name, vram_gb, gpu_count, gpu_count_max) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (req_id, sort_order, row['model_name'],
-                     row.get('vram_gb'), row.get('gpu_count'), row.get('gpu_count_max')))
+                    "(request_id, sort_order, use_case_label, model_name, vram_gb, "
+                    " gpu_count, gpu_count_max, host_vcpu, host_ram_gb, host_disk_gb, host_os) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (req_id, sort_order,
+                     row.get('use_case_label'),
+                     row['model_name'],
+                     row.get('vram_gb'), row.get('gpu_count'), row.get('gpu_count_max'),
+                     row.get('host_vcpu'), row.get('host_ram_gb'),
+                     row.get('host_disk_gb'), row.get('host_os')))
             for sort_order, row in enumerate(cleaned_blocks['workloads']):
                 conn.execute(
                     "INSERT INTO gpu_request_workloads "
