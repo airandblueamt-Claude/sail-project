@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import requests
@@ -42,6 +43,18 @@ from flask import Blueprint, jsonify, request, g
 
 from database import get_db
 from routes.assistant_tools import TOOL_SPECS, execute_tool
+
+
+# Text-format tool-call protocol — works with any Ollama model regardless
+# of whether the model was fine-tuned for OpenAI-style function calling.
+# Models that DO support native tool_calls still work; we just check that
+# field first and only fall back to text parsing if native is absent.
+#
+# The protocol is described to the model verbatim in agents/sail_helper.md.
+TOOL_CALL_RE = re.compile(
+    r'<tool_call>\s*(\{.*?\})\s*</tool_call>',
+    re.DOTALL,
+)
 
 assistant_bp = Blueprint('assistant', __name__)
 
@@ -189,38 +202,98 @@ def _ollama_chat(messages: list, tools: list | None) -> dict:
     return (r.json().get("message") or {})
 
 
-def _run_tool_loop(messages: list, user: dict) -> tuple[str, list[dict]]:
-    """Send `messages` to Ollama. If the model returns tool_calls, run
-    them, append the results, and ask again. Stop when the model
-    returns plain text or we hit MAX_TOOL_TURNS.
+def _parse_text_tool_calls(content: str) -> list[dict]:
+    """Extract <tool_call>{...}</tool_call> JSON blocks from a plain-text
+    assistant reply. Returns a list shaped like Ollama's native tool_calls
+    so the loop can treat both paths uniformly."""
+    calls: list[dict] = []
+    for m in TOOL_CALL_RE.finditer(content):
+        raw = m.group(1)
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        name = (payload.get("name") or "").strip()
+        if not name:
+            continue
+        args = payload.get("arguments", payload.get("args", {}))
+        calls.append({"function": {"name": name, "arguments": args}})
+    return calls
 
-    Returns (final_text, transcript) — transcript is the list of
-    {tool, args, result_preview} dicts for debugging / UI display.
+
+def _strip_tool_calls_from_text(content: str) -> str:
+    """Remove <tool_call>...</tool_call> blocks from the visible reply
+    so we only show prose to the user."""
+    return TOOL_CALL_RE.sub("", content).strip()
+
+
+def _run_tool_loop(messages: list, user: dict) -> tuple[str, list[dict]]:
+    """Send `messages` to Ollama, execute any tool calls the model
+    returns (native or text-format), feed results back, repeat. Stop
+    when the model returns plain text or we hit MAX_TOOL_TURNS.
+
+    Two paths are supported in parallel so this works with any model:
+
+      a) NATIVE — `tool_calls` field in the response. We append a
+         `tool` role message with the JSON result, the OpenAI convention.
+
+      b) TEXT — `<tool_call>{...}</tool_call>` blocks in the reply text.
+         We append a `user` role message with `<tool_result>{...}`,
+         which every model understands as part of the conversation.
+
+    Returns (final_text, transcript).
     """
     transcript: list[dict] = []
-    for turn in range(MAX_TOOL_TURNS):
+    for _ in range(MAX_TOOL_TURNS):
         msg = _ollama_chat(messages, tools=TOOL_SPECS)
-        tool_calls = msg.get("tool_calls") or []
+        native_calls = msg.get("tool_calls") or []
         content = (msg.get("content") or "").strip()
-        if not tool_calls:
-            # Model produced its final answer.
-            return content, transcript
-        # Append the assistant's tool-call message verbatim so Ollama
-        # sees the call/result pair next turn.
-        messages.append({
-            "role": "assistant",
-            "content": content,
-            "tool_calls": tool_calls,
-        })
-        for call in tool_calls:
-            fn = (call.get("function") or {})
-            name = fn.get("name") or ""
-            args = fn.get("arguments")
-            result = execute_tool(name, args, user)
-            messages.append({"role": "tool", "name": name, "content": result})
-            preview = result[:300] + ("…" if len(result) > 300 else "")
-            transcript.append({"tool": name, "args": args, "result": preview})
-    # Last-resort fallback if the model never settles.
+
+        # Native first; fall back to text parsing if absent.
+        text_calls: list[dict] = []
+        if not native_calls:
+            text_calls = _parse_text_tool_calls(content)
+
+        if not native_calls and not text_calls:
+            # Model has nothing more to look up — this is its final answer.
+            # Strip any partial / malformed tool-call markup that didn't
+            # parse, so the user never sees raw protocol noise.
+            return _strip_tool_calls_from_text(content), transcript
+
+        if native_calls:
+            # Replay the assistant turn with its tool_calls intact, then
+            # one `tool` role message per call carrying the JSON result.
+            messages.append({
+                "role": "assistant",
+                "content": content,
+                "tool_calls": native_calls,
+            })
+            for call in native_calls:
+                fn = (call.get("function") or {})
+                name = fn.get("name") or ""
+                args = fn.get("arguments")
+                result = execute_tool(name, args, user)
+                messages.append({"role": "tool", "name": name, "content": result})
+                preview = result[:300] + ("…" if len(result) > 300 else "")
+                transcript.append({"tool": name, "args": args, "result": preview})
+        else:
+            # Text path: replay the assistant's reply as-is (the
+            # <tool_call> blocks stay so the model sees its own call),
+            # then a single user message carrying every <tool_result>.
+            messages.append({"role": "assistant", "content": content})
+            result_blocks: list[str] = []
+            for call in text_calls:
+                fn = call.get("function") or {}
+                name = fn.get("name") or ""
+                args = fn.get("arguments")
+                result = execute_tool(name, args, user)
+                result_blocks.append(
+                    f'<tool_result name="{name}">{result}</tool_result>'
+                )
+                preview = result[:300] + ("…" if len(result) > 300 else "")
+                transcript.append({"tool": name, "args": args, "result": preview})
+            messages.append({"role": "user", "content": "\n".join(result_blocks)})
+
     return (
         "I kept looking up data but couldn't reach a final answer in the "
         "allowed number of tool calls. Try narrowing the question.",
