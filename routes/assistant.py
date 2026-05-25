@@ -71,27 +71,68 @@ MAX_TOOL_TURNS = 5
 # every request so edits land without a server restart. Setting
 # SAIL_AGENT_HOTRELOAD=0 caches the file in memory for a tiny speedup
 # (and to "freeze" the prompt while editing).
-AGENT_PROMPT_PATH = Path(__file__).resolve().parent.parent / 'agents' / 'sail_helper.md'
+AGENT_DIR        = Path(__file__).resolve().parent.parent / 'agents'
+AGENT_PROMPT_PATH = AGENT_DIR / 'sail_helper.md'
+SKILLS_DIR       = AGENT_DIR / 'skills'
 _HOTRELOAD = os.environ.get('SAIL_AGENT_HOTRELOAD', '1') != '0'
-_CACHED_PROMPT: str | None = None
+_CACHED_BASE: str | None = None
+_CACHED_SKILLS: tuple[str, str] | None = None  # (combined_text, signature)
 
 
-def _load_system_prompt_template() -> str:
-    """Return the markdown system-prompt template (with {snapshot}
-    placeholder still in place). Re-reads from disk unless hot-reload
-    is disabled."""
-    global _CACHED_PROMPT
-    if _HOTRELOAD or _CACHED_PROMPT is None:
+def _load_base_prompt() -> str:
+    """Return the base agent definition (identity + schema + rules).
+    Re-reads each call unless hot-reload is disabled."""
+    global _CACHED_BASE
+    if _HOTRELOAD or _CACHED_BASE is None:
         try:
-            _CACHED_PROMPT = AGENT_PROMPT_PATH.read_text(encoding='utf-8')
+            _CACHED_BASE = AGENT_PROMPT_PATH.read_text(encoding='utf-8')
         except FileNotFoundError:
-            # If the markdown is missing, fail loud — there's no useful
-            # behaviour without the agent definition.
             raise RuntimeError(
                 f"Agent definition not found at {AGENT_PROMPT_PATH}. "
                 "Restore agents/sail_helper.md or set a different path."
             )
-    return _CACHED_PROMPT
+    return _CACHED_BASE
+
+
+def _load_skills() -> str:
+    """Scan agents/skills/*.md and concatenate them under a header.
+
+    Files starting with `_` or ending in `.md.off` are skipped — useful
+    for temporarily parking a skill without deleting it. Hot-reloaded
+    per request (~1ms for a handful of small files).
+    """
+    global _CACHED_SKILLS
+    if not SKILLS_DIR.exists():
+        return ""
+    paths = sorted(
+        p for p in SKILLS_DIR.glob('*.md')
+        if p.name not in ('README.md',) and not p.name.startswith('_')
+    )
+    # Cheap signature so cached version invalidates on file change.
+    signature = ";".join(f"{p.name}:{p.stat().st_mtime_ns}:{p.stat().st_size}" for p in paths)
+    if not _HOTRELOAD and _CACHED_SKILLS and _CACHED_SKILLS[1] == signature:
+        return _CACHED_SKILLS[0]
+
+    if not paths:
+        combined = ""
+    else:
+        chunks = ["\n\n---\n\n## Skills available\n\n"
+                  "Each subsection below is a task playbook. Apply the one whose\n"
+                  "`use_when:` matches the user's request; use steps verbatim.\n"]
+        for p in paths:
+            chunks.append(f"\n### Skill: {p.stem}\n")
+            chunks.append(p.read_text(encoding='utf-8').strip())
+            chunks.append("\n")
+        combined = "".join(chunks)
+    _CACHED_SKILLS = (combined, signature)
+    return combined
+
+
+def _load_system_prompt_template() -> str:
+    """Compose the full system prompt template: base agent file +
+    every skill file under agents/skills/. {snapshot} placeholder is
+    left intact for the caller to substitute."""
+    return _load_base_prompt() + _load_skills()
 
 
 def _build_user_snapshot(conn, user) -> str:
