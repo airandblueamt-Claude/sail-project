@@ -1,10 +1,21 @@
 """GPU subsystem — separate inventory and allocation-request flow.
 
-Lives entirely apart from the existing assets/tickets domain. Six tables:
+Lives apart from the existing assets/tickets domain. A request has one of
+three kinds (new_infra / gpu_allocation / compute_partnership / other);
+all child sections are optional regardless of kind — request_kind is a UI
+hint, not a constraint.
 
-    gpu_assets, gpu_requests,
-    gpu_request_models, gpu_request_workloads,
-    gpu_request_deliverables, gpu_request_phases
+Child tables read/written here:
+
+    gpu_request_models         flat: model_name, vram_gb, gpu_count [, max]
+    gpu_request_workloads      flat: name, config, estimated_hours
+    gpu_request_deliverables   flat: description
+    gpu_request_phases         flat: name, target_date, description
+    gpu_request_contributions  flat: name, description, benefit
+    gpu_request_vm_groups
+      └─ gpu_request_vm_roles  nested under each group
+    gpu_request_fields         section/key/value bucket — used for
+                               networking + remote-access sections
 
 A request is "open" while gpu_requests.decided_at IS NULL; once a reviewer
 records a response, decided_at is set. Reopen clears all six response fields.
@@ -17,23 +28,39 @@ from database import get_db, log_audit
 gpu_bp = Blueprint('gpu', __name__)
 
 REQUESTER_TYPES = ('internal', 'partner', 'academic', 'vendor')
+REQUEST_KINDS = ('new_infra', 'gpu_allocation', 'compute_partnership', 'other')
 DECISIONS = ('approved', 'approved_with_conditions', 'rejected')
 REVIEW_ROLES = ('admin', 'manager', 'technician')
 
-BLOCK_NAMES = ('models', 'workloads', 'deliverables', 'phases')
+# Flat blocks parsed by _parse_blocks (block[idx][field] form names).
+# VM groups are 2-level and parsed separately by _parse_vm_groups.
+BLOCK_NAMES = ('models', 'workloads', 'deliverables', 'phases', 'contributions')
 # Per-block required + optional fields. Required must be non-empty for the
 # row to count; rows where every required field is empty are silently dropped.
 BLOCK_FIELDS = {
-    'models':       {'required': ('model_name',),
-                     'optional': ('vram_gb', 'gpu_count')},
-    'workloads':    {'required': ('name',),
-                     'optional': ('config', 'estimated_hours')},
-    'deliverables': {'required': ('description',),
-                     'optional': ()},
-    'phases':       {'required': ('name',),
-                     'optional': ('target_date', 'description')},
+    'models':        {'required': ('model_name',),
+                      'optional': ('vram_gb', 'gpu_count', 'gpu_count_max')},
+    'workloads':     {'required': ('name',),
+                      'optional': ('config', 'estimated_hours')},
+    'deliverables':  {'required': ('description',),
+                      'optional': ()},
+    'phases':        {'required': ('name',),
+                      'optional': ('target_date', 'description')},
+    'contributions': {'required': ('name',),
+                      'optional': ('description', 'benefit')},
 }
-INT_FIELDS = {'vram_gb', 'gpu_count', 'estimated_hours'}
+INT_FIELDS = {'vram_gb', 'gpu_count', 'gpu_count_max', 'estimated_hours'}
+
+# Sections persisted into gpu_request_fields. The keys listed are what the
+# template renders as labelled inputs; extra section/key pairs from the
+# extractor are accepted on POST too (the template just doesn't surface
+# them yet).
+FIELD_SECTIONS = ('networking', 'access', 'relationship')
+
+# VM-role columns (per-role spec under each VM group).
+VM_ROLE_FIELDS = ('role_name', 'vm_count', 'vcpu_per_vm', 'ram_gb_per_vm',
+                  'disk_gb_per_vm', 'disk_type', 'os', 'notes')
+VM_ROLE_INT_FIELDS = {'vm_count', 'vcpu_per_vm', 'ram_gb_per_vm', 'disk_gb_per_vm'}
 
 
 # ── Inventory ──────────────────────────────────────────────────────────────
@@ -227,6 +254,93 @@ def _validate_block_rows(blocks):
     return cleaned, errors
 
 
+def _parse_vm_groups(form):
+    """Pull vm_groups[g][name|summary] and vm_groups[g][roles][r][field] from the form.
+
+    Returns a list of group dicts, each with a 'roles' list inside.
+    Group-level pattern: vm_groups[g_idx][name]  /  vm_groups[g_idx][summary]
+    Role-level pattern:  vm_groups[g_idx][roles][r_idx][role_name|vm_count|...]
+
+    Empty groups (no name and no non-empty role) are dropped silently.
+    """
+    g_pat = re.compile(r'^vm_groups\[(\d+)\]\[(name|summary)\]$')
+    r_pat = re.compile(r'^vm_groups\[(\d+)\]\[roles\]\[(\d+)\]\[(\w+)\]$')
+    groups = {}
+    for key, val in form.items():
+        m = g_pat.match(key)
+        if m:
+            g_idx = int(m.group(1))
+            groups.setdefault(g_idx, {'name': '', 'summary': '', 'roles': {}})
+            groups[g_idx][m.group(2)] = val.strip()
+            continue
+        m = r_pat.match(key)
+        if m:
+            g_idx = int(m.group(1))
+            r_idx = int(m.group(2))
+            field = m.group(3)
+            groups.setdefault(g_idx, {'name': '', 'summary': '', 'roles': {}})
+            groups[g_idx]['roles'].setdefault(r_idx, {})[field] = val.strip()
+
+    # Flatten + drop empties; coerce role ints.
+    cleaned = []
+    errors = []
+    for g_idx in sorted(groups.keys()):
+        g = groups[g_idx]
+        roles_clean = []
+        for r_idx in sorted(g['roles'].keys()):
+            role = g['roles'][r_idx]
+            # Drop a role row if every field is empty.
+            if not any((role.get(f) or '').strip() for f in VM_ROLE_FIELDS):
+                continue
+            if not (role.get('role_name') or '').strip():
+                errors.append(
+                    f'VM group #{g_idx + 1} role #{r_idx + 1}: role name is required.')
+            for f in VM_ROLE_FIELDS:
+                raw = (role.get(f) or '').strip()
+                if f in VM_ROLE_INT_FIELDS:
+                    if raw == '':
+                        role[f] = None
+                    else:
+                        try:
+                            role[f] = int(raw)
+                        except ValueError:
+                            errors.append(
+                                f'VM group #{g_idx + 1} role #{r_idx + 1}: '
+                                f'{f} must be a whole number.')
+                            role[f] = None
+                else:
+                    role[f] = raw or None
+            roles_clean.append(role)
+        if not g['name'].strip() and not roles_clean:
+            continue
+        if not g['name'].strip():
+            errors.append(f'VM group #{g_idx + 1}: group name is required.')
+        cleaned.append({
+            'name': g['name'].strip(),
+            'summary': g['summary'].strip() or None,
+            'roles': roles_clean,
+        })
+    return cleaned, errors
+
+
+def _parse_fields(form):
+    """Pull fields[section][key]=value pairs out of the form (networking/access/etc).
+
+    Empty values are dropped. Returns a list of (section, key, value) tuples.
+    """
+    pat = re.compile(r'^fields\[(\w+)\]\[(\w+)\]$')
+    out = []
+    for key, val in form.items():
+        m = pat.match(key)
+        if not m:
+            continue
+        section, k = m.group(1), m.group(2)
+        v = val.strip()
+        if v:
+            out.append((section, k, v))
+    return out
+
+
 def _validate_parent(form):
     errors = []
     title = form.get('title', '').strip()
@@ -236,6 +350,10 @@ def _validate_parent(form):
     requester_type = form.get('requester_type', 'internal')
     if requester_type not in REQUESTER_TYPES:
         errors.append('Invalid requester type.')
+
+    request_kind = form.get('request_kind', '').strip() or None
+    if request_kind is not None and request_kind not in REQUEST_KINDS:
+        errors.append('Invalid request kind.')
 
     def _int(name, label):
         raw = form.get(name, '').strip()
@@ -255,6 +373,7 @@ def _validate_parent(form):
         errors.append('End date cannot be before start date.')
 
     return {
+        'request_kind': request_kind,
         'title': title,
         'use_case': form.get('use_case', '').strip() or None,
         'requester_type': requester_type,
@@ -265,6 +384,7 @@ def _validate_parent(form):
         'start_date': start,
         'end_date': end,
         'duration_text': form.get('duration_text', '').strip() or None,
+        'existing_resource_ref': form.get('existing_resource_ref', '').strip() or None,
         'notes': form.get('notes', '').strip() or None,
     }, errors
 
@@ -275,7 +395,9 @@ def request_new():
         values, errors_p = _validate_parent(request.form)
         raw_blocks = _parse_blocks(request.form)
         cleaned_blocks, errors_b = _validate_block_rows(raw_blocks)
-        errors = errors_p + errors_b
+        vm_groups, errors_v = _parse_vm_groups(request.form)
+        field_rows = _parse_fields(request.form)
+        errors = errors_p + errors_b + errors_v
 
         if errors:
             for e in errors:
@@ -283,24 +405,29 @@ def request_new():
             return render_template('gpu/request_new.html',
                                    values=values,
                                    blocks=cleaned_blocks,
-                                   requester_types=REQUESTER_TYPES)
+                                   vm_groups=vm_groups,
+                                   field_rows=field_rows,
+                                   requester_types=REQUESTER_TYPES,
+                                   request_kinds=REQUEST_KINDS,
+                                   field_sections=FIELD_SECTIONS)
 
         with get_db() as conn:
             number = _next_request_number(conn)
             cur = conn.execute("""
                 INSERT INTO gpu_requests (
-                    request_number, title, use_case,
+                    request_number, request_kind, title, use_case,
                     requester_id, requester_name, requester_email,
                     requester_org, requester_type,
                     requested_hours, start_date, end_date, duration_text,
-                    notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    existing_resource_ref, notes, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
             """, (
-                number, values['title'], values['use_case'],
+                number, values['request_kind'], values['title'], values['use_case'],
                 g.user['id'], values['requester_name'], values['requester_email'],
                 values['requester_org'], values['requester_type'],
                 values['requested_hours'], values['start_date'], values['end_date'],
                 values['duration_text'],
+                values['existing_resource_ref'],
                 values['notes'],
             ))
             req_id = cur.lastrowid
@@ -308,9 +435,10 @@ def request_new():
             for sort_order, row in enumerate(cleaned_blocks['models']):
                 conn.execute(
                     "INSERT INTO gpu_request_models "
-                    "(request_id, sort_order, model_name, vram_gb, gpu_count) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (req_id, sort_order, row['model_name'], row.get('vram_gb'), row.get('gpu_count')))
+                    "(request_id, sort_order, model_name, vram_gb, gpu_count, gpu_count_max) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (req_id, sort_order, row['model_name'],
+                     row.get('vram_gb'), row.get('gpu_count'), row.get('gpu_count_max')))
             for sort_order, row in enumerate(cleaned_blocks['workloads']):
                 conn.execute(
                     "INSERT INTO gpu_request_workloads "
@@ -328,6 +456,34 @@ def request_new():
                     "(request_id, sort_order, name, target_date, description) "
                     "VALUES (?, ?, ?, ?, ?)",
                     (req_id, sort_order, row['name'], row.get('target_date'), row.get('description')))
+            for sort_order, row in enumerate(cleaned_blocks['contributions']):
+                conn.execute(
+                    "INSERT INTO gpu_request_contributions "
+                    "(request_id, sort_order, name, description, benefit) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (req_id, sort_order, row['name'],
+                     row.get('description'), row.get('benefit')))
+            for g_order, group in enumerate(vm_groups):
+                cur_g = conn.execute(
+                    "INSERT INTO gpu_request_vm_groups "
+                    "(request_id, sort_order, name, summary) VALUES (?, ?, ?, ?)",
+                    (req_id, g_order, group['name'], group['summary']))
+                group_id = cur_g.lastrowid
+                for r_order, role in enumerate(group['roles']):
+                    conn.execute(
+                        "INSERT INTO gpu_request_vm_roles "
+                        "(group_id, sort_order, role_name, vm_count, vcpu_per_vm, "
+                        " ram_gb_per_vm, disk_gb_per_vm, disk_type, os, notes) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (group_id, r_order, role['role_name'],
+                         role.get('vm_count'), role.get('vcpu_per_vm'),
+                         role.get('ram_gb_per_vm'), role.get('disk_gb_per_vm'),
+                         role.get('disk_type'), role.get('os'), role.get('notes')))
+            for section, key, value in field_rows:
+                conn.execute(
+                    "INSERT INTO gpu_request_fields (request_id, section, key, value) "
+                    "VALUES (?, ?, ?, ?)",
+                    (req_id, section, key, value))
 
             log_audit(conn, 'gpu_requests', req_id, 'create',
                       changed_by=g.user['id'])
@@ -336,6 +492,7 @@ def request_new():
 
     # GET — empty form prefilled from current user.
     values = {
+        'request_kind': '',
         'title': '',
         'use_case': '',
         'requester_type': 'internal',
@@ -346,12 +503,17 @@ def request_new():
         'start_date': '',
         'end_date': '',
         'duration_text': '',
+        'existing_resource_ref': '',
         'notes': '',
     }
     blocks = {b: [] for b in BLOCK_NAMES}
     return render_template('gpu/request_new.html',
                            values=values, blocks=blocks,
-                           requester_types=REQUESTER_TYPES)
+                           vm_groups=[],
+                           field_rows=[],
+                           requester_types=REQUESTER_TYPES,
+                           request_kinds=REQUEST_KINDS,
+                           field_sections=FIELD_SECTIONS)
 
 
 @gpu_bp.route('/requests/<number>')

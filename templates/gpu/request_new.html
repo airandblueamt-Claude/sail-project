@@ -4,19 +4,31 @@
 <div class="page-header">
     <div>
         <a href="{{ url_for('gpu.request_list') }}" class="breadcrumb">GPU Requests</a>
-        <h2>New Allocation Request</h2>
+        <h2>New Request</h2>
         <p class="muted" style="margin:4px 0 0">
-            Build the request from blocks. Click "+ Add" to attach the sections you need; leave the rest off. Free-form fields — list whatever the requester actually said.
+            Pick the kind of request first — the form will show only the sections that make sense. Every section is optional; leave off whatever the requester didn't say.
         </p>
     </div>
 </div>
 
-<form method="post" class="form-card">
+<form method="post" class="form-card" data-kind-form>
+
+    {# ── Kind selector ────────────────────────────────────────────────────── #}
+    <div class="form-row">
+        <label>Request kind</label>
+        <select name="request_kind" class="input" data-kind-select>
+            <option value="" {% if not values.request_kind %}selected{% endif %}>— pick one —</option>
+            <option value="new_infra"            {% if values.request_kind == 'new_infra' %}selected{% endif %}>New infrastructure (BYOC brief: VMs + networking + GPU)</option>
+            <option value="gpu_allocation"       {% if values.request_kind == 'gpu_allocation' %}selected{% endif %}>GPU allocation (short list of GPU models)</option>
+            <option value="compute_partnership"  {% if values.request_kind == 'compute_partnership' %}selected{% endif %}>Compute partnership (time on existing infra + workloads/phases)</option>
+            <option value="other"                {% if values.request_kind == 'other' %}selected{% endif %}>Other</option>
+        </select>
+    </div>
 
     <div class="form-row">
         <label>Title *</label>
         <input type="text" name="title" value="{{ values.title }}" required class="input" maxlength="200"
-               placeholder="One-line summary, e.g. 'KFUPM joint research' or 'Thakaa Med partnership'">
+               placeholder="One-line summary, e.g. 'OrbitronAI BYOC' or 'Thakaa Med partnership'">
     </div>
     <div class="form-row">
         <label>Use case</label>
@@ -47,50 +59,70 @@
     <div class="form-row">
         <label>Organisation</label>
         <input type="text" name="requester_org" value="{{ values.requester_org or '' }}" class="input" maxlength="200"
-               placeholder="e.g. KFUPM, Thakaa Med">
+               placeholder="e.g. KFUPM, Thakaa Med, OrbitronAI">
     </div>
 
-    <h4 style="margin-top:24px">Window <small class="muted">(optional)</small></h4>
-    <div class="form-row-group">
-        <div class="form-row" style="flex:1">
-            <label>Total hours</label>
-            <input type="number" name="requested_hours" value="{{ values.requested_hours or '' }}" min="0" class="input" placeholder="e.g. 1500">
+    {# ── Hours/dates ─ shown for gpu_allocation, compute_partnership ───────── #}
+    <div data-kind-section data-kinds="gpu_allocation,compute_partnership,other">
+        <h4 style="margin-top:24px">Window <small class="muted">(optional)</small></h4>
+        <div class="form-row-group">
+            <div class="form-row" style="flex:1">
+                <label>Total hours</label>
+                <input type="number" name="requested_hours" value="{{ values.requested_hours or '' }}" min="0" class="input" placeholder="e.g. 1500">
+            </div>
+            <div class="form-row" style="flex:1">
+                <label>Start</label>
+                <input type="date" name="start_date" value="{{ values.start_date or '' }}" class="input">
+            </div>
+            <div class="form-row" style="flex:1">
+                <label>End</label>
+                <input type="date" name="end_date" value="{{ values.end_date or '' }}" class="input">
+            </div>
+            <div class="form-row" style="flex:1">
+                <label>Duration text</label>
+                <input type="text" name="duration_text" value="{{ values.duration_text or '' }}" class="input" placeholder="e.g. 12 months (renewable)">
+            </div>
         </div>
-        <div class="form-row" style="flex:1">
-            <label>Start</label>
-            <input type="date" name="start_date" value="{{ values.start_date or '' }}" class="input">
-        </div>
-        <div class="form-row" style="flex:1">
-            <label>End</label>
-            <input type="date" name="end_date" value="{{ values.end_date or '' }}" class="input">
-        </div>
-        <div class="form-row" style="flex:1">
-            <label>Duration text</label>
-            <input type="text" name="duration_text" value="{{ values.duration_text or '' }}" class="input" placeholder="e.g. 12 months (renewable)">
+    </div>
+
+    {# ── existing_resource_ref ─ shown for compute_partnership ─────────────── #}
+    <div data-kind-section data-kinds="compute_partnership">
+        <h4 style="margin-top:24px">Existing resource <small class="muted">(which SAIL resource the requester wants time on)</small></h4>
+        <div class="form-row">
+            <input type="text" name="existing_resource_ref" value="{{ values.existing_resource_ref or '' }}"
+                   class="input" maxlength="300"
+                   placeholder="e.g. the 4× A40 cluster SAIL already owns">
         </div>
     </div>
 
     <h4 style="margin-top:24px">Add sections</h4>
+    <p class="muted" style="margin-top:0;font-size:0.9em">Buttons hide based on the kind above. Each section starts collapsed; "+ Add" reveals it.</p>
     <div class="form-row" style="display:flex;flex-wrap:wrap;gap:8px">
-        <button type="button" class="btn btn-ghost" data-add-block="models">+ Add models requested</button>
-        <button type="button" class="btn btn-ghost" data-add-block="workloads">+ Add a workload</button>
-        <button type="button" class="btn btn-ghost" data-add-block="deliverables">+ Add a partner deliverable</button>
-        <button type="button" class="btn btn-ghost" data-add-block="phases">+ Add a phase / milestone</button>
-        <button type="button" class="btn btn-ghost" data-add-block="notes">+ Add notes</button>
+        <button type="button" class="btn btn-ghost" data-add-block="models"        data-kinds="new_infra,gpu_allocation,compute_partnership,other">+ GPU options</button>
+        <button type="button" class="btn btn-ghost" data-add-block="vm_groups"     data-kinds="new_infra,other">+ VM groups</button>
+        <button type="button" class="btn btn-ghost" data-add-block="workloads"     data-kinds="compute_partnership,other">+ Workloads</button>
+        <button type="button" class="btn btn-ghost" data-add-block="phases"        data-kinds="compute_partnership,other">+ Phases / milestones</button>
+        <button type="button" class="btn btn-ghost" data-add-block="contributions" data-kinds="compute_partnership,other">+ What requester provides back</button>
+        <button type="button" class="btn btn-ghost" data-add-block="deliverables"  data-kinds="new_infra,compute_partnership,other">+ Partner deliverables</button>
+        <button type="button" class="btn btn-ghost" data-add-block="networking"    data-kinds="new_infra,other">+ Networking</button>
+        <button type="button" class="btn btn-ghost" data-add-block="access"        data-kinds="new_infra,other">+ Remote access</button>
+        <button type="button" class="btn btn-ghost" data-add-block="notes"         data-kinds="new_infra,gpu_allocation,compute_partnership,other">+ Notes</button>
     </div>
 
     {# ── Models block ─────────────────────────────────────────────────────── #}
     <div class="block-section" data-block-container="models" {% if not blocks.models %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
         <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong>Models requested</strong>
+            <strong>GPU options</strong>
             <button type="button" class="btn btn-ghost" data-remove-block="models" style="font-size:0.85em">– remove section</button>
         </div>
+        <p class="muted" style="margin-top:4px;font-size:0.85em">If the requester gave a count range (e.g. "2 per module, up to 8"), put 2 in min and 8 in max.</p>
         <div data-rows>
             {% for row in blocks.models %}
             <div data-row data-row-index="{{ loop.index0 }}" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                <input type="text" name="models[{{ loop.index0 }}][model_name]" value="{{ row.model_name or '' }}" placeholder="Model name (e.g. NVIDIA A100)" class="input" style="flex:2">
-                <input type="number" name="models[{{ loop.index0 }}][vram_gb]" value="{{ row.vram_gb or '' }}" min="0" placeholder="VRAM GB" class="input" style="flex:1">
-                <input type="number" name="models[{{ loop.index0 }}][gpu_count]" value="{{ row.gpu_count or '' }}" min="0" placeholder="Count" class="input" style="flex:1">
+                <input type="text"   name="models[{{ loop.index0 }}][model_name]"    value="{{ row.model_name or '' }}" placeholder="Model name (e.g. NVIDIA A100)" class="input" style="flex:2">
+                <input type="number" name="models[{{ loop.index0 }}][vram_gb]"       value="{{ row.vram_gb or '' }}"    min="0" placeholder="VRAM GB"  class="input" style="flex:1">
+                <input type="number" name="models[{{ loop.index0 }}][gpu_count]"     value="{{ row.gpu_count or '' }}"  min="0" placeholder="Count min" class="input" style="flex:1">
+                <input type="number" name="models[{{ loop.index0 }}][gpu_count_max]" value="{{ row.gpu_count_max or '' }}" min="0" placeholder="Count max" class="input" style="flex:1">
                 <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
             </div>
             {% endfor %}
@@ -98,10 +130,69 @@
         <button type="button" class="btn btn-ghost" data-add-row="models" style="margin-top:8px">+ Add row</button>
     </div>
     <template data-row-template="models"><div data-row data-row-index="__INDEX__" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-        <input type="text" name="models[__INDEX__][model_name]" placeholder="Model name (e.g. NVIDIA A100)" class="input" style="flex:2">
-        <input type="number" name="models[__INDEX__][vram_gb]" min="0" placeholder="VRAM GB" class="input" style="flex:1">
-        <input type="number" name="models[__INDEX__][gpu_count]" min="0" placeholder="Count" class="input" style="flex:1">
+        <input type="text"   name="models[__INDEX__][model_name]"    placeholder="Model name (e.g. NVIDIA A100)" class="input" style="flex:2">
+        <input type="number" name="models[__INDEX__][vram_gb]"       min="0" placeholder="VRAM GB"  class="input" style="flex:1">
+        <input type="number" name="models[__INDEX__][gpu_count]"     min="0" placeholder="Count min" class="input" style="flex:1">
+        <input type="number" name="models[__INDEX__][gpu_count_max]" min="0" placeholder="Count max" class="input" style="flex:1">
         <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
+    </div></template>
+
+    {# ── VM groups (2-level: group with nested roles) ─────────────────────── #}
+    <div class="block-section" data-block-container="vm_groups" {% if not vm_groups %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>VM groups</strong>
+            <button type="button" class="btn btn-ghost" data-remove-block="vm_groups" style="font-size:0.85em">– remove section</button>
+        </div>
+        <p class="muted" style="margin-top:4px;font-size:0.85em">Use one group per logical tier (e.g. "Kubernetes Cluster", "PostgreSQL HA", "Supporting Services"). Add a role per spec line under each group.</p>
+        <div data-rows>
+            {% for g in vm_groups %}
+            <div data-row data-row-index="{{ loop.index0 }}" data-vm-group style="border:1px dashed var(--border,#ccc);padding:10px;border-radius:6px;margin-top:8px">
+                <div style="display:flex;gap:8px;align-items:center">
+                    <input type="text" name="vm_groups[{{ loop.index0 }}][name]"    value="{{ g.name or '' }}"    placeholder="Group name (e.g. Kubernetes Cluster Nodes)" class="input" style="flex:2">
+                    <input type="text" name="vm_groups[{{ loop.index0 }}][summary]" value="{{ g.summary or '' }}" placeholder="Summary (e.g. 30 VMs recommended)" class="input" style="flex:3">
+                    <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove group">– group</button>
+                </div>
+                <div data-vm-roles style="margin-top:8px;padding-left:12px;border-left:2px solid var(--border,#eee)">
+                    {% for role in g.roles %}
+                    <div data-vm-role data-role-index="{{ loop.index0 }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">
+                        <input type="text"   name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][role_name]"      value="{{ role.role_name or '' }}"      placeholder="Role (e.g. Control Plane)" class="input" style="flex:2;min-width:160px">
+                        <input type="number" name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][vm_count]"       value="{{ role.vm_count or '' }}"       min="0" placeholder="#VMs"     class="input" style="width:80px">
+                        <input type="number" name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][vcpu_per_vm]"    value="{{ role.vcpu_per_vm or '' }}"    min="0" placeholder="vCPU/vm"  class="input" style="width:90px">
+                        <input type="number" name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][ram_gb_per_vm]"  value="{{ role.ram_gb_per_vm or '' }}"  min="0" placeholder="RAM GB"   class="input" style="width:90px">
+                        <input type="number" name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][disk_gb_per_vm]" value="{{ role.disk_gb_per_vm or '' }}" min="0" placeholder="Disk GB"  class="input" style="width:90px">
+                        <input type="text"   name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][disk_type]"      value="{{ role.disk_type or '' }}"             placeholder="Disk type" class="input" style="width:90px">
+                        <input type="text"   name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][os]"             value="{{ role.os or '' }}"                    placeholder="OS"        class="input" style="width:130px">
+                        <input type="text"   name="vm_groups[{{ loop.index0 }}][roles][{{ loop.index0 }}][notes]"          value="{{ role.notes or '' }}"                 placeholder="Notes"     class="input" style="flex:2;min-width:160px">
+                        <button type="button" class="btn btn-ghost" data-remove-vm-role aria-label="Remove role">–</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" class="btn btn-ghost" data-add-vm-role style="margin-top:6px;font-size:0.85em">+ Add role to this group</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-ghost" data-add-row="vm_groups" style="margin-top:8px">+ Add group</button>
+    </div>
+    {# vm_groups templates — one for an empty group, one for an empty role. #}
+    <template data-row-template="vm_groups"><div data-row data-row-index="__INDEX__" data-vm-group style="border:1px dashed var(--border,#ccc);padding:10px;border-radius:6px;margin-top:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" name="vm_groups[__INDEX__][name]"    placeholder="Group name (e.g. Kubernetes Cluster Nodes)" class="input" style="flex:2">
+            <input type="text" name="vm_groups[__INDEX__][summary]" placeholder="Summary (e.g. 30 VMs recommended)" class="input" style="flex:3">
+            <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove group">– group</button>
+        </div>
+        <div data-vm-roles style="margin-top:8px;padding-left:12px;border-left:2px solid var(--border,#eee)"></div>
+        <button type="button" class="btn btn-ghost" data-add-vm-role style="margin-top:6px;font-size:0.85em">+ Add role to this group</button>
+    </div></template>
+    <template data-vm-role-template><div data-vm-role data-role-index="__RINDEX__" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">
+        <input type="text"   name="vm_groups[__GINDEX__][roles][__RINDEX__][role_name]"      placeholder="Role (e.g. Control Plane)" class="input" style="flex:2;min-width:160px">
+        <input type="number" name="vm_groups[__GINDEX__][roles][__RINDEX__][vm_count]"       min="0" placeholder="#VMs"     class="input" style="width:80px">
+        <input type="number" name="vm_groups[__GINDEX__][roles][__RINDEX__][vcpu_per_vm]"    min="0" placeholder="vCPU/vm"  class="input" style="width:90px">
+        <input type="number" name="vm_groups[__GINDEX__][roles][__RINDEX__][ram_gb_per_vm]"  min="0" placeholder="RAM GB"   class="input" style="width:90px">
+        <input type="number" name="vm_groups[__GINDEX__][roles][__RINDEX__][disk_gb_per_vm]" min="0" placeholder="Disk GB"  class="input" style="width:90px">
+        <input type="text"   name="vm_groups[__GINDEX__][roles][__RINDEX__][disk_type]"             placeholder="Disk type" class="input" style="width:90px">
+        <input type="text"   name="vm_groups[__GINDEX__][roles][__RINDEX__][os]"                    placeholder="OS"        class="input" style="width:130px">
+        <input type="text"   name="vm_groups[__GINDEX__][roles][__RINDEX__][notes]"                 placeholder="Notes"     class="input" style="flex:2;min-width:160px">
+        <button type="button" class="btn btn-ghost" data-remove-vm-role aria-label="Remove role">–</button>
     </div></template>
 
     {# ── Workloads block ──────────────────────────────────────────────────── #}
@@ -129,27 +220,6 @@
         <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
     </div></template>
 
-    {# ── Deliverables block ───────────────────────────────────────────────── #}
-    <div class="block-section" data-block-container="deliverables" {% if not blocks.deliverables %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong>Partner deliverables</strong>
-            <button type="button" class="btn btn-ghost" data-remove-block="deliverables" style="font-size:0.85em">– remove section</button>
-        </div>
-        <div data-rows>
-            {% for row in blocks.deliverables %}
-            <div data-row data-row-index="{{ loop.index0 }}" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                <input type="text" name="deliverables[{{ loop.index0 }}][description]" value="{{ row.description or '' }}" placeholder="Deliverable (e.g. ClearML server setup)" class="input" style="flex:1">
-                <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
-            </div>
-            {% endfor %}
-        </div>
-        <button type="button" class="btn btn-ghost" data-add-row="deliverables" style="margin-top:8px">+ Add row</button>
-    </div>
-    <template data-row-template="deliverables"><div data-row data-row-index="__INDEX__" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-        <input type="text" name="deliverables[__INDEX__][description]" placeholder="Deliverable (e.g. ClearML server setup)" class="input" style="flex:1">
-        <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
-    </div></template>
-
     {# ── Phases block ─────────────────────────────────────────────────────── #}
     <div class="block-section" data-block-container="phases" {% if not blocks.phases %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -174,6 +244,107 @@
         <input type="text" name="phases[__INDEX__][description]" placeholder="Description" class="input" style="flex:3">
         <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
     </div></template>
+
+    {# ── Contributions block (what the requester provides back) ───────────── #}
+    <div class="block-section" data-block-container="contributions" {% if not blocks.contributions %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>What the requester provides back</strong>
+            <button type="button" class="btn btn-ghost" data-remove-block="contributions" style="font-size:0.85em">– remove section</button>
+        </div>
+        <p class="muted" style="margin-top:4px;font-size:0.85em">Partnership-style requests where the requester also contributes (cluster setup, knowledge transfer, documentation, support, etc.).</p>
+        <div data-rows>
+            {% for row in blocks.contributions %}
+            <div data-row data-row-index="{{ loop.index0 }}" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                <input type="text" name="contributions[{{ loop.index0 }}][name]"        value="{{ row.name or '' }}"        placeholder="Name (e.g. ClearML Integration)" class="input" style="flex:2">
+                <input type="text" name="contributions[{{ loop.index0 }}][description]" value="{{ row.description or '' }}" placeholder="Description" class="input" style="flex:3">
+                <input type="text" name="contributions[{{ loop.index0 }}][benefit]"     value="{{ row.benefit or '' }}"     placeholder="SAIL benefit" class="input" style="flex:2">
+                <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-ghost" data-add-row="contributions" style="margin-top:8px">+ Add row</button>
+    </div>
+    <template data-row-template="contributions"><div data-row data-row-index="__INDEX__" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <input type="text" name="contributions[__INDEX__][name]"        placeholder="Name (e.g. ClearML Integration)" class="input" style="flex:2">
+        <input type="text" name="contributions[__INDEX__][description]" placeholder="Description" class="input" style="flex:3">
+        <input type="text" name="contributions[__INDEX__][benefit]"     placeholder="SAIL benefit" class="input" style="flex:2">
+        <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
+    </div></template>
+
+    {# ── Deliverables block ───────────────────────────────────────────────── #}
+    <div class="block-section" data-block-container="deliverables" {% if not blocks.deliverables %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Partner deliverables (what we provide)</strong>
+            <button type="button" class="btn btn-ghost" data-remove-block="deliverables" style="font-size:0.85em">– remove section</button>
+        </div>
+        <div data-rows>
+            {% for row in blocks.deliverables %}
+            <div data-row data-row-index="{{ loop.index0 }}" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                <input type="text" name="deliverables[{{ loop.index0 }}][description]" value="{{ row.description or '' }}" placeholder="Deliverable" class="input" style="flex:1">
+                <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-ghost" data-add-row="deliverables" style="margin-top:8px">+ Add row</button>
+    </div>
+    <template data-row-template="deliverables"><div data-row data-row-index="__INDEX__" class="block-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <input type="text" name="deliverables[__INDEX__][description]" placeholder="Deliverable" class="input" style="flex:1">
+        <button type="button" class="btn btn-ghost" data-remove-row aria-label="Remove">–</button>
+    </div></template>
+
+    {# ── Networking (typed key/value into gpu_request_fields) ─────────────── #}
+    {% set nw = {} %}
+    {% for r in field_rows if r[0] == 'networking' %}{% set _ = nw.update({r[1]: r[2]}) %}{% endfor %}
+    <div class="block-section" data-block-container="networking" {% if not nw %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Networking</strong>
+            <button type="button" class="btn btn-ghost" data-remove-block="networking" style="font-size:0.85em">– remove section</button>
+        </div>
+        <div class="form-row-group" style="margin-top:8px">
+            <div class="form-row" style="flex:1"><label>Subnet</label>
+                <input type="text" name="fields[networking][subnet]" value="{{ nw.subnet or '' }}" class="input" placeholder="e.g. 10.20.0.0/16"></div>
+            <div class="form-row" style="flex:1"><label>Static IP</label>
+                <input type="text" name="fields[networking][static_ip]" value="{{ nw.static_ip or '' }}" class="input" placeholder="ingress / LB IP"></div>
+        </div>
+        <div class="form-row-group">
+            <div class="form-row" style="flex:1"><label>DNS</label>
+                <input type="text" name="fields[networking][dns]" value="{{ nw.dns or '' }}" class="input" placeholder="e.g. novaos.sail.co.in"></div>
+            <div class="form-row" style="flex:1"><label>TLS</label>
+                <input type="text" name="fields[networking][tls]" value="{{ nw.tls or '' }}" class="input" placeholder="internal CA / cert-manager / ..."></div>
+        </div>
+        <div class="form-row">
+            <label>Outbound endpoints</label>
+            <input type="text" name="fields[networking][outbound]" value="{{ nw.outbound or '' }}" class="input" placeholder="Vertex AI, api.openai.com, api.anthropic.com, ...">
+        </div>
+        <div class="form-row">
+            <label>Notes</label>
+            <input type="text" name="fields[networking][notes]" value="{{ nw.notes or '' }}" class="input" placeholder="Anything else about the network setup">
+        </div>
+    </div>
+
+    {# ── Remote access ────────────────────────────────────────────────────── #}
+    {% set ax = {} %}
+    {% for r in field_rows if r[0] == 'access' %}{% set _ = ax.update({r[1]: r[2]}) %}{% endfor %}
+    <div class="block-section" data-block-container="access" {% if not ax %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Remote access</strong>
+            <button type="button" class="btn btn-ghost" data-remove-block="access" style="font-size:0.85em">– remove section</button>
+        </div>
+        <div class="form-row-group" style="margin-top:8px">
+            <div class="form-row" style="flex:1"><label>SSH / VPN</label>
+                <input type="text" name="fields[access][ssh_vpn]" value="{{ ax.ssh_vpn or '' }}" class="input" placeholder="VPN gateway, SSH key handover, ..."></div>
+            <div class="form-row" style="flex:1"><label>Bastion</label>
+                <input type="text" name="fields[access][bastion]" value="{{ ax.bastion or '' }}" class="input" placeholder="Jump host details if direct access isn't possible"></div>
+        </div>
+        <div class="form-row">
+            <label>Service account / sudo</label>
+            <input type="text" name="fields[access][service_account]" value="{{ ax.service_account or '' }}" class="input" placeholder="Admin/sudo user, service account, ...">
+        </div>
+        <div class="form-row">
+            <label>Notes</label>
+            <input type="text" name="fields[access][notes]" value="{{ ax.notes or '' }}" class="input" placeholder="Anything else about access">
+        </div>
+    </div>
 
     {# ── Notes block (single textarea, no rows) ───────────────────────────── #}
     <div class="block-section" data-block-container="notes" {% if not values.notes %}hidden{% endif %} style="margin-top:16px;border:1px solid var(--border,#ccc);padding:12px;border-radius:6px">
