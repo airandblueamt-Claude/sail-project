@@ -7,11 +7,16 @@
         <h2>{{ request_.request_number }} — {{ request_.title }}</h2>
     </div>
     <div class="page-actions">
+        {% if request_.request_kind %}
+            <span class="badge">{{ request_.request_kind | pretty }}</span>
+        {% endif %}
         {% if request_.decided_at %}
             <span class="badge">{{ (request_.decision or 'decided') | pretty }}</span>
         {% else %}
             <span class="badge badge-status-open">open</span>
         {% endif %}
+        <a href="{{ url_for('tickets.new_ticket', gpu_request_id=request_.id, type='maintenance') }}"
+           class="btn btn-ghost">Raise maintenance ticket</a>
     </div>
 </div>
 
@@ -20,6 +25,7 @@
         <h4>Request</h4>
         <dl class="detail-list">
             <dt>Request #</dt><dd>{{ request_.request_number }}</dd>
+            <dt>Kind</dt><dd>{{ request_.request_kind | pretty if request_.request_kind else '—' }}</dd>
             <dt>Use case</dt><dd>{{ request_.use_case or '—' }}</dd>
             <dt>Hours</dt><dd>{{ request_.requested_hours or '—' }}</dd>
             <dt>Window</dt>
@@ -29,6 +35,18 @@
                 {% else %}—{% endif %}
             </dd>
             <dt>Duration</dt><dd>{{ request_.duration_text or '—' }}</dd>
+            {% if request_.existing_resource_ref %}
+                <dt>Existing resource</dt><dd>{{ request_.existing_resource_ref }}</dd>
+            {% endif %}
+            {% if request_.source and request_.source != 'manual' %}
+                <dt>Source</dt>
+                <dd>
+                    {{ request_.source | pretty }}
+                    {% if request_.agent_confidence is not none %}
+                        <span class="muted">(confidence {{ '%.0f%%' % (request_.agent_confidence * 100) }})</span>
+                    {% endif %}
+                </dd>
+            {% endif %}
         </dl>
     </div>
     <div class="detail-card">
@@ -49,7 +67,7 @@
 
 {% if models %}
 <div class="detail-card" style="margin-top:16px">
-    <h4>Models requested ({{ models|length }})</h4>
+    <h4>GPU options ({{ models|length }})</h4>
     <table class="data-table">
         <thead><tr><th>Model</th><th>VRAM</th><th>Count</th></tr></thead>
         <tbody>
@@ -57,11 +75,61 @@
             <tr>
                 <td>{{ m.model_name }}</td>
                 <td>{{ m.vram_gb ~ ' GB' if m.vram_gb else '—' }}</td>
-                <td class="num">{{ m.gpu_count or '—' }}</td>
+                <td class="num">
+                    {% if m.gpu_count and m.gpu_count_max and m.gpu_count_max != m.gpu_count %}
+                        {{ m.gpu_count }}–{{ m.gpu_count_max }}
+                    {% elif m.gpu_count %}
+                        {{ m.gpu_count }}
+                    {% else %}—{% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+</div>
+{% endif %}
+
+{% if vm_groups %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>VM groups ({{ vm_groups|length }})</h4>
+    {% for grp in vm_groups %}
+        <div style="margin-top:{{ '0' if loop.first else '14px' }}">
+            <strong>{{ grp.group.name }}</strong>
+            {% if grp.group.summary %}
+                <span class="muted">— {{ grp.group.summary }}</span>
+            {% endif %}
+            {% if grp.roles %}
+            <table class="data-table" style="margin-top:6px">
+                <thead>
+                    <tr>
+                        <th>Role</th>
+                        <th class="num">#VMs</th>
+                        <th class="num">vCPU/vm</th>
+                        <th class="num">RAM/vm</th>
+                        <th class="num">Disk/vm</th>
+                        <th>Disk type</th>
+                        <th>OS</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in grp.roles %}
+                    <tr>
+                        <td>{{ r.role_name }}</td>
+                        <td class="num">{{ r.vm_count or '—' }}</td>
+                        <td class="num">{{ r.vcpu_per_vm or '—' }}</td>
+                        <td class="num">{{ (r.ram_gb_per_vm ~ ' GB') if r.ram_gb_per_vm else '—' }}</td>
+                        <td class="num">{{ (r.disk_gb_per_vm ~ ' GB') if r.disk_gb_per_vm else '—' }}</td>
+                        <td>{{ r.disk_type or '—' }}</td>
+                        <td>{{ r.os or '—' }}</td>
+                        <td>{{ r.notes or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+    {% endfor %}
 </div>
 {% endif %}
 
@@ -112,12 +180,71 @@
 </div>
 {% endif %}
 
+{% if contributions %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>What the requester provides back ({{ contributions|length }})</h4>
+    <table class="data-table">
+        <thead><tr><th>Item</th><th>Description</th><th>SAIL benefit</th></tr></thead>
+        <tbody>
+            {% for c in contributions %}
+            <tr>
+                <td>{{ c.name }}</td>
+                <td>{{ c.description or '—' }}</td>
+                <td>{{ c.benefit or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if fields_by_section %}
+{% for section, rows in fields_by_section.items() %}
+<div class="detail-card" style="margin-top:16px">
+    <h4>{{ section | pretty }}</h4>
+    <dl class="detail-list">
+        {% for r in rows %}
+            <dt>{{ r.key | replace('_', ' ') | pretty }}</dt><dd>{{ r.value }}</dd>
+        {% endfor %}
+    </dl>
+</div>
+{% endfor %}
+{% endif %}
+
 {% if request_.notes %}
 <div class="detail-card" style="margin-top:16px">
     <h4>Notes from requester</h4>
     <p class="specs-text">{{ request_.notes }}</p>
 </div>
 {% endif %}
+
+<div class="detail-card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+        <h4 style="margin:0">Related tickets ({{ related_tickets|length }})</h4>
+        <a href="{{ url_for('tickets.new_ticket', gpu_request_id=request_.id, type='maintenance') }}"
+           class="btn btn-ghost">+ Raise maintenance ticket</a>
+    </div>
+    {% if related_tickets %}
+    <table class="data-table" style="margin-top:8px">
+        <thead><tr><th>Ticket</th><th>Title</th><th>Type</th><th>Priority</th><th>Status</th><th>Submitted by</th><th>Created</th></tr></thead>
+        <tbody>
+            {% for t in related_tickets %}
+            <tr>
+                <td><a href="{{ url_for('tickets.ticket_detail', ticket_id=t.id) }}">{{ t.ticket_number }}</a></td>
+                <td>{{ t.title }}</td>
+                <td>{{ t.type | pretty }}</td>
+                <td>{{ t.priority | pretty }}</td>
+                <td><span class="badge">{{ t.status | pretty }}</span></td>
+                <td>{{ t.submitted_by_name or '—' }}</td>
+                <td>{{ t.created_at[:16] if t.created_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted" style="margin:8px 0 0">No tickets linked to this request yet.</p>
+    {% endif %}
+</div>
 
 <div class="detail-card" style="margin-top:16px">
     <h4>Response</h4>

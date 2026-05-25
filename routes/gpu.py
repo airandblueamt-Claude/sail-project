@@ -532,23 +532,55 @@ def request_detail(number):
         if not req:
             flash('Request not found.', 'error')
             return redirect(url_for('gpu.request_list'))
+        rid = req['id']
         models = conn.execute(
             "SELECT * FROM gpu_request_models WHERE request_id=? ORDER BY sort_order, id",
-            (req['id'],)).fetchall()
+            (rid,)).fetchall()
         workloads = conn.execute(
             "SELECT * FROM gpu_request_workloads WHERE request_id=? ORDER BY sort_order, id",
-            (req['id'],)).fetchall()
+            (rid,)).fetchall()
         deliverables = conn.execute(
             "SELECT * FROM gpu_request_deliverables WHERE request_id=? ORDER BY sort_order, id",
-            (req['id'],)).fetchall()
+            (rid,)).fetchall()
         phases = conn.execute(
             "SELECT * FROM gpu_request_phases WHERE request_id=? ORDER BY sort_order, id",
-            (req['id'],)).fetchall()
+            (rid,)).fetchall()
+        contributions = conn.execute(
+            "SELECT * FROM gpu_request_contributions WHERE request_id=? ORDER BY sort_order, id",
+            (rid,)).fetchall()
+        groups = conn.execute(
+            "SELECT * FROM gpu_request_vm_groups WHERE request_id=? ORDER BY sort_order, id",
+            (rid,)).fetchall()
+        vm_groups = []
+        for grp in groups:
+            roles = conn.execute(
+                "SELECT * FROM gpu_request_vm_roles WHERE group_id=? ORDER BY sort_order, id",
+                (grp['id'],)).fetchall()
+            vm_groups.append({'group': grp, 'roles': roles})
+        field_rows = conn.execute(
+            "SELECT * FROM gpu_request_fields WHERE request_id=? ORDER BY section, key",
+            (rid,)).fetchall()
+        fields_by_section = {}
+        for r in field_rows:
+            fields_by_section.setdefault(r['section'], []).append(r)
+        # Maintenance tickets linked to this request.
+        related_tickets = conn.execute("""
+            SELECT t.id, t.ticket_number, t.title, t.type, t.priority, t.status,
+                   t.created_at, e.name AS submitted_by_name
+            FROM tickets t
+            LEFT JOIN employees e ON e.id = t.submitted_by
+            WHERE t.gpu_request_id = ?
+            ORDER BY t.created_at DESC
+        """, (rid,)).fetchall()
     is_reviewer = g.user['role'] in REVIEW_ROLES
     return render_template('gpu/request_detail.html',
                            request_=req,
                            models=models, workloads=workloads,
                            deliverables=deliverables, phases=phases,
+                           contributions=contributions,
+                           vm_groups=vm_groups,
+                           fields_by_section=fields_by_section,
+                           related_tickets=related_tickets,
                            is_reviewer=is_reviewer,
                            decisions=DECISIONS)
 
