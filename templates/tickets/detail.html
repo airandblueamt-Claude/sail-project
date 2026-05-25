@@ -32,6 +32,15 @@
             {% if ticket.asset_tag %}
             <dt>Asset</dt><dd>{{ ticket.asset_tag }} — {{ ticket.equipment_name }}</dd>
             {% endif %}
+            {% if ticket.gpu_request_number %}
+            <dt>Linked to</dt>
+            <dd>
+                <a href="{{ url_for('gpu.request_detail', number=ticket.gpu_request_number) }}">
+                    {{ ticket.gpu_request_number }}
+                </a>
+                {% if ticket.gpu_request_title %} — {{ ticket.gpu_request_title }}{% endif %}
+            </dd>
+            {% endif %}
             <dt>Created</dt><dd>{{ ticket.created_at }}</dd>
             {% if ticket.resolved_at %}<dt>Resolved</dt><dd>{{ ticket.resolved_at }}</dd>{% endif %}
         </dl>

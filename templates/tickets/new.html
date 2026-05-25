@@ -3,16 +3,27 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <a href="{{ url_for('tickets.list_tickets') }}" class="breadcrumb">Tickets</a>
-        <h2>Raise New Issue</h2>
+        {% if gpu_request %}
+            <a href="{{ url_for('gpu.request_detail', number=gpu_request.request_number) }}" class="breadcrumb">{{ gpu_request.request_number }}</a>
+            <h2>Raise maintenance ticket</h2>
+            <p class="muted" style="margin:4px 0 0">Linked to <strong>{{ gpu_request.request_number }} — {{ gpu_request.title }}</strong>. Asset and issue category are optional for request-linked tickets.</p>
+        {% else %}
+            <a href="{{ url_for('tickets.list_tickets') }}" class="breadcrumb">Tickets</a>
+            <h2>Raise New Issue</h2>
+        {% endif %}
     </div>
 </div>
 
 <form method="post" class="form-card">
+    {% if gpu_request %}
+        <input type="hidden" name="gpu_request_id" value="{{ gpu_request.id }}">
+    {% endif %}
+    <input type="hidden" name="type" value="{{ preselect_type or 'incident' }}">
+
     <div class="form-row">
-        <label>Asset *</label>
-        <select name="asset_id" required class="input">
-            <option value="">-- pick an asset --</option>
+        <label>Asset{% if not gpu_request %} *{% endif %}</label>
+        <select name="asset_id" {% if not gpu_request %}required{% endif %} class="input">
+            <option value="">{% if gpu_request %}-- not applicable --{% else %}-- pick an asset --{% endif %}</option>
             {% for a in assets %}
             <option value="{{ a.id }}" {% if preselect_asset_id == a.id %}selected{% endif %}>
                 {{ a.asset_tag }} — {{ a.name }}{% if a.brand %} ({{ a.brand }}){% endif %}
@@ -23,8 +34,8 @@
 
     <div class="form-row-group">
         <div class="form-row" style="flex:1">
-            <label>Issue Category *</label>
-            <select name="issue_category_id" required class="input">
+            <label>Issue Category{% if not gpu_request %} *{% endif %}</label>
+            <select name="issue_category_id" {% if not gpu_request %}required{% endif %} class="input">
                 <option value="">-- pick a category --</option>
                 {% for c in categories %}
                 <option value="{{ c.id }}">{{ c.name }}</option>

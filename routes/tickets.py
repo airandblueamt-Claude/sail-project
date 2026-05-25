@@ -5,6 +5,8 @@ from email_service import notify_ticket_created, notify_ticket_update, notify_af
 
 tickets_bp = Blueprint('tickets', __name__)
 
+TICKET_TYPES = ('maintenance', 'move', 'new_request', 'incident', 'decommission', 'other')
+
 
 def next_ticket_number(conn):
     row = conn.execute(
@@ -83,35 +85,53 @@ def new_ticket():
         if request.method == 'POST':
             asset_id = request.form.get('asset_id', type=int)
             issue_cat_id = request.form.get('issue_category_id', type=int)
-            if not asset_id:
-                flash('Asset is required.', 'error')
-                return redirect(request.url)
-            if not issue_cat_id:
-                flash('Issue category is required.', 'error')
+            gpu_request_id = request.form.get('gpu_request_id', type=int)
+            ticket_type = request.form.get('type', 'incident').strip() or 'incident'
+            if ticket_type not in TICKET_TYPES:
+                flash('Invalid ticket type.', 'error')
                 return redirect(request.url)
 
-            # Confirm the asset still exists (avoid a stale-tab IntegrityError).
-            asset_exists = conn.execute(
-                "SELECT 1 FROM assets WHERE id = ?", (asset_id,)).fetchone()
-            if not asset_exists:
-                flash('That asset no longer exists.', 'error')
-                return redirect(url_for('inventory.manage_assets'))
+            # When the ticket is linked to a GPU request, the request itself
+            # is the subject — asset and issue_category aren't applicable.
+            if gpu_request_id:
+                gpu_req_exists = conn.execute(
+                    "SELECT 1 FROM gpu_requests WHERE id = ?", (gpu_request_id,)).fetchone()
+                if not gpu_req_exists:
+                    flash('Linked GPU request no longer exists.', 'error')
+                    return redirect(url_for('gpu.request_list'))
+                asset_id = None
+                issue_cat_id = issue_cat_id or None
+            else:
+                if not asset_id:
+                    flash('Asset is required.', 'error')
+                    return redirect(request.url)
+                if not issue_cat_id:
+                    flash('Issue category is required.', 'error')
+                    return redirect(request.url)
+                # Confirm the asset still exists (avoid a stale-tab IntegrityError).
+                asset_exists = conn.execute(
+                    "SELECT 1 FROM assets WHERE id = ?", (asset_id,)).fetchone()
+                if not asset_exists:
+                    flash('That asset no longer exists.', 'error')
+                    return redirect(url_for('inventory.manage_assets'))
 
             ticket_num = next_ticket_number(conn)
             cur = conn.execute("""
                 INSERT INTO tickets
                     (ticket_number, type, priority, title, description,
-                     asset_id, submitted_by, issue_category_id,
+                     asset_id, submitted_by, issue_category_id, gpu_request_id,
                      affected_user_name, affected_user_email)
-                VALUES (?, 'incident', ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 ticket_num,
+                ticket_type,
                 request.form.get('priority', 'medium'),
                 request.form['title'],
                 request.form.get('description', ''),
                 asset_id,
                 g.user['id'],
                 issue_cat_id,
+                gpu_request_id,
                 request.form.get('affected_user_name', '').strip() or None,
                 request.form.get('affected_user_email', '').strip() or None,
             ))
@@ -135,6 +155,19 @@ def new_ticket():
             return redirect(url_for('tickets.ticket_detail', ticket_id=cur.lastrowid))
 
         preselect_asset_id = request.args.get('asset_id', type=int)
+        preselect_type = (request.args.get('type', '').strip() or None)
+        if preselect_type not in TICKET_TYPES:
+            preselect_type = None
+        gpu_request_id = request.args.get('gpu_request_id', type=int)
+        gpu_request = None
+        if gpu_request_id:
+            gpu_request = conn.execute("""
+                SELECT id, request_number, title FROM gpu_requests WHERE id = ?
+            """, (gpu_request_id,)).fetchone()
+            if not gpu_request:
+                flash('Linked GPU request not found.', 'error')
+                return redirect(url_for('gpu.request_list'))
+
         assets = conn.execute("""
             SELECT a.id, a.asset_tag, em.name, em.brand
             FROM assets a JOIN equipment_models em ON a.equipment_model_id = em.id
@@ -148,7 +181,10 @@ def new_ticket():
     return render_template('tickets/new.html',
                            assets=assets,
                            categories=categories,
-                           preselect_asset_id=preselect_asset_id)
+                           preselect_asset_id=preselect_asset_id,
+                           preselect_type=preselect_type,
+                           gpu_request=gpu_request,
+                           ticket_types=TICKET_TYPES)
 
 
 @tickets_bp.route('/<int:ticket_id>')
@@ -157,13 +193,16 @@ def ticket_detail(ticket_id):
         ticket = conn.execute("""
             SELECT t.*, e.name as submitter_name, ea.name as assignee_name,
                    a.asset_tag, em.name as equipment_name,
-                   ic.name as category_name
+                   ic.name as category_name,
+                   gr.request_number as gpu_request_number,
+                   gr.title as gpu_request_title
             FROM tickets t
             JOIN employees e ON t.submitted_by = e.id
             LEFT JOIN employees ea ON t.assigned_to = ea.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN equipment_models em ON a.equipment_model_id = em.id
             LEFT JOIN issue_categories ic ON t.issue_category_id = ic.id
+            LEFT JOIN gpu_requests gr ON t.gpu_request_id = gr.id
             WHERE t.id = ?
         """, (ticket_id,)).fetchone()
 
