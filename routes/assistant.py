@@ -37,7 +37,10 @@ OLLAMA_URL = os.environ.get(
     'http://10.20.6.61:11434/api/chat',
 )
 OLLAMA_MODEL = os.environ.get('SAIL_OLLAMA_MODEL', 'nemotron3:33b-q8')
-REQUEST_TIMEOUT_S = int(os.environ.get('SAIL_OLLAMA_TIMEOUT', '60'))
+# 33B-q8 on a typical local GPU can need 60-120s of generation time
+# before the response object lands. Bump the default and let an env var
+# override on faster hardware.
+REQUEST_TIMEOUT_S = int(os.environ.get('SAIL_OLLAMA_TIMEOUT', '180'))
 
 # Cap on user message length — long messages waste context window and
 # usually mean the user pasted something they shouldn't have.
@@ -249,8 +252,9 @@ def chat():
     except requests.exceptions.Timeout:
         return jsonify({
             "error": "timeout",
-            "reply": ("The model took too long to answer (>"
-                      f"{REQUEST_TIMEOUT_S}s). Your question may be too broad — try a shorter one."),
+            "reply": (f"The model didn't finish in {REQUEST_TIMEOUT_S}s. "
+                      "That's a normal latency ceiling for a 33B-q8 model on "
+                      "shared hardware — try again, or raise SAIL_OLLAMA_TIMEOUT."),
         }), 504
     except requests.exceptions.RequestException as e:
         return jsonify({
