@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Inspection Items{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>Inspection Items</h2>
+        <p class="muted">Individual checks inside each area. The Today page
+           lists them in display-order.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('inspections.admin_areas') }}" class="btn btn-ghost">
+            <i data-lucide="layers"></i> Manage areas
+        </a>
+        <a href="{{ url_for('inspections.admin_sheets') }}" class="btn btn-ghost">
+            <i data-lucide="users"></i> Sheets
+        </a>
+        <a href="{{ url_for('inspections.dashboard') }}" class="btn btn-ghost">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+<form method="post" action="{{ url_for('inspections.admin_items_add') }}"
+      class="form-card" style="max-width:720px;margin-bottom:24px">
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="min-width:200px">
+            <label>Area</label>
+            <select name="area_id" class="input" required>
+                <option value="">— select area —</option>
+                {% for a in areas %}
+                <option value="{{ a.id }}">{{ a.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex:1;min-width:200px">
+            <label>Item name</label>
+            <input type="text" name="name" class="input" required maxlength="120"
+                   placeholder="e.g. Roof access door">
+        </div>
+        <div style="width:120px">
+            <label>Display order</label>
+            <input type="number" name="display_order" class="input" value="100" min="0">
+        </div>
+        <button type="submit" class="btn btn-primary">Add item</button>
+    </div>
+</form>
+
+{% for area in areas %}
+    <div class="card" style="margin-bottom:18px">
+        <h4 style="margin-top:0">{{ area.name }}</h4>
+        {% set group_items = items_by_area.get(area.id, []) %}
+        {% if not group_items %}
+            <p class="muted">No items in this area yet.</p>
+        {% else %}
+        <table class="data-table compact">
+            <thead>
+                <tr>
+                    <th style="width:80px">Order</th>
+                    <th>Item</th>
+                    <th style="width:170px">Status</th>
+                    <th style="width:240px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for it in group_items %}
+                <tr {% if not it.is_active or not it.is_applicable %}style="opacity:.55"{% endif %}>
+                    <td>{{ it.display_order }}</td>
+                    <td>{{ it.name }}</td>
+                    <td>
+                        {% if not it.is_active %}
+                            <span class="badge badge-muted">Inactive</span>
+                        {% elif not it.is_applicable %}
+                            <span class="badge badge-muted">N/A</span>
+                        {% else %}
+                            <span class="badge badge-success">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post"
+                              action="{{ url_for('inspections.admin_items_toggle_na', item_id=it.id) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-ghost"
+                                    title="N/A items show greyed and are not counted in completion">
+                                {% if it.is_applicable %}Mark N/A{% else %}Mark applicable{% endif %}
+                            </button>
+                        </form>
+                        <form method="post"
+                              action="{{ url_for('inspections.admin_items_toggle', item_id=it.id) }}"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-ghost">
+                                {% if it.is_active %}Deactivate{% else %}Reactivate{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+{% endfor %}
+
+{% endblock %}

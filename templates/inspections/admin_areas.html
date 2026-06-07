@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Inspection Areas{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>Inspection Areas</h2>
+        <p class="muted">Top-level groupings shown on the Today page.
+           Lower display order = appears first.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('inspections.admin_sheets') }}" class="btn btn-ghost">
+            <i data-lucide="users"></i> Sheets &amp; assignees
+        </a>
+        <a href="{{ url_for('inspections.admin_items') }}" class="btn btn-ghost">
+            <i data-lucide="list-tree"></i> Manage items
+        </a>
+        <a href="{{ url_for('inspections.dashboard') }}" class="btn btn-ghost">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+<form method="post" action="{{ url_for('inspections.admin_areas_add') }}"
+      class="form-card" style="max-width:680px;margin-bottom:24px">
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+            <label>New area name</label>
+            <input type="text" name="name" class="input" required maxlength="80"
+                   placeholder="e.g. Loading Bay">
+        </div>
+        <div style="width:200px">
+            <label>Section</label>
+            <select name="section" class="input">
+                <option value="">— Other —</option>
+                {% for s in sections %}
+                <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="width:140px">
+            <label>Display order</label>
+            <input type="number" name="display_order" class="input" value="320" min="0">
+        </div>
+        <button type="submit" class="btn btn-primary">Add area</button>
+    </div>
+</form>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Order</th>
+            <th>Name</th>
+            <th>Section</th>
+            <th>Items</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for a in areas %}
+        <tr {% if not a.is_active %}style="opacity:.55"{% endif %}>
+            <td>{{ a.display_order }}</td>
+            <td>{{ a.name }}</td>
+            <td>{% if a.section %}{{ a.section }}{% else %}<span class="muted">Other</span>{% endif %}</td>
+            <td>{{ a.item_count }}</td>
+            <td>
+                {% if a.is_active %}
+                    <span class="badge badge-success">Active</span>
+                {% else %}
+                    <span class="badge badge-muted">Inactive</span>
+                {% endif %}
+            </td>
+            <td>
+                <form method="post"
+                      action="{{ url_for('inspections.admin_areas_toggle', area_id=a.id) }}"
+                      style="display:inline">
+                    <button type="submit" class="btn btn-sm btn-ghost">
+                        {% if a.is_active %}Deactivate{% else %}Reactivate{% endif %}
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

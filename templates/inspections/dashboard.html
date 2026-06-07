@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Daily Inspection{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>Daily Inspection</h2>
+        <p class="muted">
+            {{ today_str }} ·
+            {% if today and today.submitted_at %}
+                <span class="badge badge-success">Submitted</span>
+                by {{ today.head_name or '—' }}
+                at {{ today.submitted_at | localtime }}
+            {% elif today %}
+                <span class="badge badge-status-open">Draft</span>
+                ({{ recorded_today }} / {{ total_items }} items)
+            {% else %}
+                <span class="badge badge-muted">Not started</span>
+            {% endif %}
+        </p>
+    </div>
+    <div style="display:flex;gap:8px">
+        {% if is_staff %}
+        <a href="{{ url_for('inspections.today') }}" class="btn btn-primary">
+            <i data-lucide="clipboard-list"></i>
+            {% if today %}Continue today{% else %}Start today{% endif %}
+        </a>
+        {% endif %}
+        {% if today %}
+        <a href="{{ url_for('inspections.export_day_xlsx', inspection_date=today_str) }}" class="btn btn-ghost"
+           title="Download today's report as Excel">
+            <i data-lucide="download"></i> Today .xlsx
+        </a>
+        {% endif %}
+        <a href="{{ url_for('inspections.export_month_xlsx') }}" class="btn btn-ghost"
+           title="Download this month as an Excel grid">
+            <i data-lucide="download"></i> Month .xlsx
+        </a>
+        <a href="{{ url_for('inspections.history') }}" class="btn btn-ghost">
+            <i data-lucide="history"></i> History
+        </a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
+        <div class="stat-label">Today's completion</div>
+        <div class="stat-value">{{ completion_pct }}%</div>
+        <span class="muted" style="font-size:.78rem">
+            {{ recorded_today }} / {{ total_items }} items
+        </span>
+    </div>
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
+        <div class="stat-label">Inactive items today</div>
+        <div class="stat-value" style="color:{% if inactive_today > 0 %}var(--red){% else %}var(--green){% endif %}">{{ inactive_today }}</div>
+        <span class="muted" style="font-size:.78rem">flagged in today's round</span>
+    </div>
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
+        <div class="stat-label">Areas pending</div>
+        <div class="stat-value">{{ pending_areas|length }}</div>
+        <span class="muted" style="font-size:.78rem">untouched so far</span>
+    </div>
+    <div class="stat-card" style="flex-direction:column;align-items:center;text-align:center;gap:6px">
+        <div class="stat-label">Submitted streak</div>
+        <div class="stat-value">{{ streak }}</div>
+        <span class="muted" style="font-size:.78rem">consecutive days</span>
+    </div>
+</div>
+
+{% if sheets_today %}
+<div class="card" style="margin-top:24px">
+    <h4 style="margin-top:0;display:flex;align-items:center;gap:8px">
+        <i data-lucide="users"></i> Today by sheet
+        <a href="{{ url_for('inspections.admin_sheets') }}" class="muted" style="font-size:.78rem;font-weight:400;margin-left:auto">manage assignees</a>
+    </h4>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+        {% for s in sheets_today %}
+        <div style="border:1px solid var(--rule);border-radius:10px;padding:12px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                <strong style="font-size:1.05rem;text-transform:uppercase;letter-spacing:.03em">{{ s.name }}</strong>
+                <span class="muted" style="font-size:.85rem">
+                    {% if s.assignee_name %}<i data-lucide="user-check" style="width:13px;height:13px;vertical-align:-2px"></i> {{ s.assignee_name }}
+                    {% else %}<span style="color:var(--red)">Unassigned</span>{% endif %}
+                </span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.8rem;margin:8px 0 4px">
+                <span class="muted">{{ s.recorded }} / {{ s.total }} done</span>
+                <span><strong>{{ s.pct }}%</strong></span>
+            </div>
+            <div style="height:7px;background:var(--bg-soft);border-radius:4px;overflow:hidden">
+                <div style="height:100%;width:{{ s.pct }}%;background:{% if s.pct == 100 %}var(--green){% else %}var(--accent){% endif %}"></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:.8rem;flex-wrap:wrap">
+                {% if s.inactive > 0 %}<span class="badge badge-status-inactive">{{ s.inactive }} inactive</span>{% endif %}
+                {% if s.signoff %}
+                    <span class="badge badge-status-active"><i data-lucide="check-circle" style="width:13px;height:13px;vertical-align:-2px"></i>
+                        Completed{% if s.signoff.signer_name %} · {{ s.signoff.signer_name }}{% endif %}</span>
+                {% else %}
+                    <span class="badge badge-muted">Not completed</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="dashboard-row" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
+
+    <div class="card">
+        <h4 style="margin-top:0">Today's status by area</h4>
+        {% if not area_status %}
+            <p class="muted">No active areas in the catalog yet.
+               Add some from the admin pages.</p>
+        {% else %}
+        <table class="data-table compact">
+            <thead><tr><th>Area</th><th>Recorded</th><th>Inactive</th></tr></thead>
+            <tbody>
+                {% for a in area_status %}
+                <tr>
+                    <td>
+                        {% if today %}
+                        <a href="{{ url_for('inspections.today') }}#area-{{ a.area.id }}">{{ a.area.name }}</a>
+                        {% else %}
+                        {{ a.area.name }}
+                        {% endif %}
+                    </td>
+                    <td>{{ a.recorded }} / {{ a.item_count }}</td>
+                    <td>
+                        {% if a.inactive > 0 %}
+                            <span class="badge badge-status-inactive">{{ a.inactive }}</span>
+                        {% elif a.recorded == a.item_count and a.item_count > 0 %}
+                            <span class="badge badge-status-active">clear</span>
+                        {% else %}
+                            <span class="muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h4 style="margin-top:0">30-day inactive trend</h4>
+        {% if max_inactive == 0 %}
+            <p class="muted">No inactive items recorded in the last 30 days.</p>
+        {% else %}
+        <div style="display:flex;align-items:flex-end;gap:3px;height:140px;border-bottom:1px solid var(--rule);padding-bottom:4px">
+            {% for d in trend %}
+            <div title="{{ d.date }}: {{ d.inactive }} inactive"
+                 style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+                <div style="width:100%;background:{% if d.inactive > 0 %}var(--red){% elif d.has_row %}var(--green){% else %}var(--bg-soft){% endif %};
+                            height:{% if d.inactive > 0 %}{{ d.height_pct }}{% elif d.has_row %}6{% else %}3{% endif %}%;
+                            min-height:2px;border-radius:2px 2px 0 0">
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-muted);margin-top:4px">
+            <span>{{ trend[0].date if trend }}</span>
+            <span>peak: {{ max_inactive }}</span>
+            <span>{{ trend[-1].date if trend }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<div class="card" style="margin-top:24px">
+    <h4 style="margin-top:0">Top recurring problems (last 30 days)</h4>
+    {% if not recurring %}
+        <p class="muted">Nothing has been flagged inactive recently.</p>
+    {% else %}
+    <table class="data-table compact">
+        <thead><tr><th>Item</th><th>Area</th><th style="text-align:right">Times flagged</th></tr></thead>
+        <tbody>
+            {% for r in recurring %}
+            <tr>
+                <td>{{ r.item_name }}</td>
+                <td class="muted">{{ r.area_name }}</td>
+                <td style="text-align:right"><strong>{{ r.hits }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top:24px">
+    <h4 style="margin-top:0">Recent inspections</h4>
+    {% if not last7 %}
+        <p class="muted">No inspections yet.</p>
+    {% else %}
+    <table class="data-table compact">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Recorded</th>
+                <th>Inactive</th>
+                <th>Engineer</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in last7 %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('inspections.detail', inspection_date=r.inspection_date) }}">{{ r.inspection_date }}</a>
+                </td>
+                <td>
+                    {% if r.submitted_at %}
+                        <span class="badge badge-success">Submitted</span>
+                    {% else %}
+                        <span class="badge badge-status-open">Draft</span>
+                    {% endif %}
+                </td>
+                <td>{{ r.recorded or 0 }}</td>
+                <td>
+                    {% if r.inactive and r.inactive > 0 %}
+                        <span class="badge badge-status-inactive">{{ r.inactive }}</span>
+                    {% else %}
+                        <span class="muted">0</span>
+                    {% endif %}
+                </td>
+                <td>{{ r.engineer_name or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+{% endblock %}

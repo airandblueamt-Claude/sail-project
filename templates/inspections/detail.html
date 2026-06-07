@@ -1,0 +1,545 @@
+{% extends "base.html" %}
+{% from "inspections/_area_panel.html" import area_panel %}
+{% block title %}SAIL - Inspection {{ view_date.isoformat() }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>
+            {% if view_mode == 'today' %}Today's Inspection{% else %}Inspection — {{ view_date.isoformat() }}{% endif %}
+        </h2>
+        <p class="muted">
+            {{ view_date.strftime('%A, %d %B %Y') }} ·
+            {% if inspection and inspection.submitted_at %}
+                <span class="badge badge-success">Submitted</span>
+                at {{ inspection.submitted_at | localtime }}
+                {% if inspection.engineer_name %}
+                    · by {{ inspection.engineer_name }}
+                {% endif %}
+            {% else %}
+                <span class="badge badge-status-open">Draft</span>
+            {% endif %}
+        </p>
+    </div>
+    <div style="display:flex;gap:8px">
+        <a href="{{ url_for('inspections.dashboard') }}" class="btn btn-ghost">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+        </a>
+        <a href="{{ url_for('inspections.history') }}" class="btn btn-ghost">
+            <i data-lucide="history"></i> History
+        </a>
+        <a href="{{ url_for('inspections.export_day_xlsx', inspection_date=view_date.isoformat()) }}" class="btn btn-ghost"
+           title="Download this day's full report as Excel">
+            <i data-lucide="download"></i> Excel
+        </a>
+        {% if inspection and inspection.submitted_at and is_admin %}
+        <form method="post" action="{{ url_for('inspections.reopen', inspection_id=inspection.id) }}">
+            <button type="submit" class="btn btn-ghost"
+                    onclick="return confirm('Reopen this submitted inspection for editing?')">
+                <i data-lucide="lock-open"></i> Reopen
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{# Sticky completion bar — shows live state. #}
+<div class="card" style="position:sticky;top:0;z-index:5;margin-bottom:18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <div style="flex:1;min-width:220px">
+        <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px">
+            <span class="muted">Completion</span>
+            <span><strong id="js-recorded">{{ recorded }}</strong> / {{ total_items }} items
+                  · <strong id="js-pct">{{ completion_pct }}</strong>%</span>
+        </div>
+        <div style="height:8px;background:var(--bg-soft);border-radius:4px;overflow:hidden">
+            <div id="js-pct-bar" style="height:100%;width:{{ completion_pct }}%;background:var(--accent);transition:width .25s"></div>
+        </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span><span class="badge badge-status-inactive" id="js-inactive">{{ inactive }}</span> inactive</span>
+        {% if editable and inspection %}
+        <form method="post" action="{{ url_for('inspections.prefill', inspection_id=inspection.id) }}" style="display:inline">
+            <button type="submit" class="btn btn-sm btn-ghost"
+                    title="Copy the previous inspection's results into today, then edit exceptions">
+                <i data-lucide="copy"></i> Prefill from last
+            </button>
+        </form>
+        <button type="button" class="btn btn-sm btn-primary bulk-active"
+                data-inspection-id="{{ inspection.id }}"
+                title="Mark every item not yet recorded as Active">
+            <i data-lucide="check-check"></i> Mark all remaining Active
+        </button>
+        {% endif %}
+        {% if not editable %}
+            <span class="badge badge-muted">Read-only</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if not inspection %}
+    <div class="card">
+        <p class="muted">No inspection has been recorded yet. Staff users
+           can start one from the Today page.</p>
+    </div>
+{% else %}
+    {# Filter box — narrows the visible areas as you type (works read-only too). #}
+    <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="position:relative;flex:1;min-width:240px">
+            <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-muted)"></i>
+            <input type="text" id="area-filter" class="input" autocomplete="off"
+                   placeholder="Filter areas… (e.g. incubator, lab, workshop)"
+                   style="padding-left:32px">
+        </div>
+        <div style="display:flex;gap:8px">
+            <button type="button" class="btn btn-sm btn-ghost" id="expand-all">
+                <i data-lucide="chevrons-down"></i> Expand all
+            </button>
+            <button type="button" class="btn btn-sm btn-ghost" id="collapse-all">
+                <i data-lucide="chevrons-up"></i> Collapse all
+            </button>
+        </div>
+    </div>
+
+    {% if editable %}
+    <p class="muted" style="margin:-6px 2px 14px;font-size:.8rem">
+        <i data-lucide="keyboard" style="width:14px;height:14px;vertical-align:-2px"></i>
+        Fast fill: tap <strong>All Active</strong> on a section or area, then flip the few exceptions.
+        Or click a row and press <strong>1</strong>/<strong>2</strong>/<strong>3</strong> = Active/Inactive/None, <strong>↑</strong>/<strong>↓</strong> to move.
+    </p>
+    {% endif %}
+
+    {% for sheet in sheets %}
+    <section class="inspection-sheet">
+        <div class="inspection-sheet-head">
+            <div class="inspection-sheet-titlewrap">
+                <span class="inspection-sheet-name">{{ sheet.name }}</span>
+                <span class="inspection-sheet-owner">
+                    {% if sheet.assignee_name %}
+                        <i data-lucide="user-check"></i> {{ sheet.assignee_name }}
+                    {% else %}
+                        <i data-lucide="user-x"></i> <span class="muted">Unassigned</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="inspection-sheet-meta">
+                <div class="inspection-sheet-progress" title="{{ sheet.recorded }} of {{ sheet.total }} done">
+                    <span>{{ sheet.recorded }}/{{ sheet.total }} · {{ sheet.pct }}%</span>
+                    <div class="inspection-sheet-bar"><div style="width:{{ sheet.pct }}%"></div></div>
+                </div>
+                {% if sheet.inactive > 0 %}
+                    <span class="badge badge-status-inactive">{{ sheet.inactive }} inactive</span>
+                {% endif %}
+                {% if editable and inspection %}
+                <button type="button" class="btn btn-sm btn-ghost bulk-active"
+                        data-inspection-id="{{ inspection.id }}"
+                        data-area-ids="{{ sheet.area_ids|join(',') }}"
+                        title="Mark every item in the whole {{ sheet.name }} sheet Active">
+                    <i data-lucide="check-check"></i> All Active
+                </button>
+                {% endif %}
+                {% if sheet.signoff %}
+                    <span class="badge badge-status-active" title="Completed {{ sheet.signoff.signed_at | localtime }}">
+                        <i data-lucide="check-circle"></i>
+                        Completed{% if sheet.signoff.signer_name %} · {{ sheet.signoff.signer_name }}{% endif %}
+                    </span>
+                    {% if editable and inspection %}
+                    <form method="post" action="{{ url_for('inspections.sheet_signoff', inspection_id=inspection.id) }}" style="display:inline">
+                        <input type="hidden" name="sheet" value="{{ sheet.name }}">
+                        <button type="submit" class="btn btn-sm btn-ghost" title="Undo completion mark">Undo</button>
+                    </form>
+                    {% endif %}
+                {% elif editable and inspection %}
+                    <form method="post" action="{{ url_for('inspections.sheet_signoff', inspection_id=inspection.id) }}" style="display:inline"
+                          onsubmit="{% if sheet.recorded < sheet.total %}return confirm('{{ sheet.name }} is only {{ sheet.pct }}% done. Mark complete anyway?'){% endif %}">
+                        <input type="hidden" name="sheet" value="{{ sheet.name }}">
+                        <button type="submit" class="btn btn-sm btn-primary" title="Operator confirms this sheet is done (separate from the engineer day sign-off)">
+                            <i data-lucide="check-check"></i> Mark {{ sheet.name }} complete
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {% for section in sheet.sections %}
+        <details class="inspection-section" data-section open>
+            <summary class="inspection-section-head">
+                <span class="inspection-section-title">
+                    <i data-lucide="chevron-right" class="inspection-section-caret"></i>
+                    {{ section.name }}
+                </span>
+                <span style="display:flex;gap:10px;align-items:center;font-size:.82rem">
+                    {% if editable and inspection %}
+                    <button type="button" class="btn btn-sm btn-ghost bulk-active"
+                            data-inspection-id="{{ inspection.id }}"
+                            data-area-ids="{{ section.groups|map(attribute='area')|map(attribute='id')|join(',') }}"
+                            title="Mark every item in this whole section Active">
+                        <i data-lucide="check-check"></i> All Active
+                    </button>
+                    {% endif %}
+                    <span class="badge badge-muted" data-section-count>{{ section.groups|length }} areas · {{ section.item_count }} items</span>
+                </span>
+            </summary>
+            <div class="inspection-section-body">
+            {% for group in section.groups %}
+                {{ area_panel(group, results, inspection, editable, open_default=False) }}
+            {% endfor %}
+            </div>
+        </details>
+        {% endfor %}
+    </section>
+    {% endfor %}
+
+    <div class="card" style="margin-top:24px">
+        <h4 style="margin-top:0;display:flex;align-items:center;gap:8px">
+            <i data-lucide="check-circle"></i> Day sign-off
+        </h4>
+
+        {# 1) Operator completions, pulled from each sheet's "Mark complete". #}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">
+            {% for sheet in sheets %}
+            <div style="border:1px solid var(--rule);border-radius:8px;padding:10px 12px">
+                <div style="font-weight:600;text-transform:uppercase;letter-spacing:.03em;font-size:.9rem">{{ sheet.name }}</div>
+                <div style="font-size:.85rem;margin-top:3px">
+                    {% if sheet.signoff %}
+                        <span class="badge badge-status-active"><i data-lucide="check"></i>
+                            Completed{% if sheet.signoff.signer_name %} · {{ sheet.signoff.signer_name }}{% endif %}</span>
+                    {% else %}
+                        <span class="badge badge-muted">Not completed yet</span>
+                        {% if sheet.assignee_name %}<span class="muted"> · {{ sheet.assignee_name }}</span>{% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# 2) The single Head sign-off — submits & locks the day. #}
+        <form method="post" action="{{ url_for('inspections.submit', inspection_id=inspection.id) }}">
+            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+                <div style="flex:1;min-width:240px">
+                    <label>Head sign-off <span class="muted" style="font-weight:400">— reviews &amp; submits the whole day</span></label>
+                    <select name="head_id" class="input" {% if not editable %}disabled{% endif %} required>
+                        <option value="">— select the head —</option>
+                        {% for s in signatories %}
+                        <option value="{{ s.id }}" {% if inspection.head_id == s.id %}selected{% endif %}>
+                            {{ s.name }} ({{ s.role }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top:12px">
+                <label>Notes for the day (optional)</label>
+                <textarea name="notes" class="input" rows="2" maxlength="2000"
+                          placeholder="anything the team should know about today's round"
+                          {% if not editable %}readonly{% endif %}>{{ inspection.notes or '' }}</textarea>
+            </div>
+            {% if inspection.submitted_at %}
+            <p class="muted" style="font-size:.82rem;margin-top:10px">
+                <i data-lucide="lock" style="width:13px;height:13px;vertical-align:-2px"></i>
+                Submitted {{ inspection.submitted_at | localtime }}{% if inspection.head_name %} · signed by {{ inspection.head_name }}{% endif %}.
+            </p>
+            {% endif %}
+            {% if editable %}
+            <div style="margin-top:14px;display:flex;gap:10px;justify-content:flex-end">
+                <button type="submit" class="btn btn-primary"
+                        onclick="return confirm('Sign off and submit the whole day? This locks it for non-admins.')">
+                    <i data-lucide="check"></i>
+                    {% if inspection.submitted_at %}Update sign-off{% else %}Sign off &amp; submit day{% endif %}
+                </button>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if is_admin %}
+    <details class="card" style="margin-top:16px">
+        <summary style="cursor:pointer;font-weight:600;display:flex;align-items:center;gap:8px">
+            <i data-lucide="mail"></i> Email this day's report
+        </summary>
+        <form method="post" action="{{ url_for('inspections.email_day', inspection_date=view_date.isoformat()) }}"
+              style="margin-top:12px">
+            {% if not email_ready %}
+            <p class="muted" style="color:var(--red);font-size:.82rem">
+                <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:-2px"></i>
+                Email isn't set up on the server yet (SAIL_SMTP_PASSWORD). Sending won't deliver until that's added.
+            </p>
+            {% endif %}
+            <label>Send to (one or more emails, separated by comma)</label>
+            <input type="text" name="recipients" class="input" required
+                   placeholder="name@aramco.com, other@amt-arabia.net">
+            <div style="margin-top:10px">
+                <label>Message (optional)</label>
+                <textarea name="message" class="input" rows="2" maxlength="1000"
+                          placeholder="optional note to include in the email"></textarea>
+            </div>
+            <div style="margin-top:12px;display:flex;justify-content:flex-end">
+                <button type="submit" class="btn btn-primary">
+                    <i data-lucide="send"></i> Send Excel report
+                </button>
+            </div>
+        </form>
+    </details>
+    {% endif %}
+{% endif %}
+
+{% if editable %}
+<script>
+(function() {
+    const recordedEl = document.getElementById('js-recorded');
+    const pctEl = document.getElementById('js-pct');
+    const pctBar = document.getElementById('js-pct-bar');
+    const inactiveEl = document.getElementById('js-inactive');
+
+    function applyStats(data) {
+        if (data.recorded !== undefined) recordedEl.textContent = data.recorded;
+        if (data.completion_pct !== undefined) {
+            pctEl.textContent = data.completion_pct;
+            pctBar.style.width = data.completion_pct + '%';
+        }
+        if (data.inactive !== undefined) inactiveEl.textContent = data.inactive;
+    }
+
+    function flashRow(row) {
+        row.style.transition = 'background-color .35s';
+        row.style.backgroundColor = 'var(--bg-soft)';
+        setTimeout(() => { row.style.backgroundColor = ''; }, 350);
+    }
+
+    document.querySelectorAll('.inspection-toggle').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const inspId = btn.dataset.inspectionId;
+            const itemId = btn.dataset.itemId;
+            const status = btn.dataset.status;
+            if (!inspId) return;
+            try {
+                const resp = await fetch(`/inspections/${inspId}/items/${itemId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({status}),
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    alert(err.message || 'Could not save. ' + resp.status);
+                    return;
+                }
+                const data = await resp.json();
+                // Visual: clear other toggles in the group, highlight this one.
+                const group = btn.closest('.inspection-toggle-group');
+                group.querySelectorAll('.inspection-toggle').forEach(b => b.classList.remove('is-on'));
+                btn.classList.add('is-on');
+                // Tint the whole row by its new status (CSS keys off data-status).
+                const tr = btn.closest('tr');
+                if (tr) tr.dataset.status = status;
+                // Update timestamp cell with the server's local-formatted time.
+                const cell = document.querySelector(`[data-updated-cell="${itemId}"]`);
+                if (cell) cell.textContent = data.updated_at_local || data.updated_at;
+                flashRow(btn.closest('tr'));
+                applyStats(data);
+            } catch (e) {
+                alert('Network error: ' + e);
+            }
+        });
+    });
+
+    // Notes — debounced save on blur or after 600ms idle.
+    const noteTimers = new Map();
+    document.querySelectorAll('.inspection-note').forEach(inp => {
+        const save = async () => {
+            const inspId = inp.dataset.inspectionId;
+            const itemId = inp.dataset.itemId;
+            if (!inspId) return;
+            await fetch(`/inspections/${inspId}/items/${itemId}/note`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({notes: inp.value}),
+            }).catch(() => {});
+        };
+        inp.addEventListener('input', () => {
+            clearTimeout(noteTimers.get(inp));
+            noteTimers.set(inp, setTimeout(save, 700));
+        });
+        inp.addEventListener('blur', save);
+    });
+
+    // ── Bulk "All Active" (area / section / whole page) ──────────────────
+    // Reload after a bulk write so every per-area count + badge stays correct;
+    // restore the scroll position so it feels in-place.
+    try {
+        const y = sessionStorage.getItem('insp-scroll');
+        if (y !== null) { sessionStorage.removeItem('insp-scroll'); window.scrollTo(0, parseInt(y, 10)); }
+    } catch (e) {}
+
+    document.querySelectorAll('.bulk-active').forEach(btn => {
+        btn.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();   // a button inside <summary> must not toggle it
+            const inspId = btn.dataset.inspectionId;
+            if (!inspId) return;
+            const body = { status: 'active', only_unrecorded: true };
+            if (btn.dataset.areaIds) {
+                body.area_ids = btn.dataset.areaIds.split(',')
+                    .map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+            }
+            btn.disabled = true;
+            try {
+                const resp = await fetch(`/inspections/${inspId}/bulk`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body),
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    alert(err.message || 'Could not save. ' + resp.status);
+                    btn.disabled = false;
+                    return;
+                }
+                try { sessionStorage.setItem('insp-scroll', String(window.scrollY)); } catch (e) {}
+                location.reload();
+            } catch (e) {
+                alert('Network error: ' + e);
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // ── Keyboard entry: 1/2/3 = Active/Inactive/None, ↑/↓ move ───────────
+    let curRow = null;
+    function visibleRows() {
+        return Array.from(document.querySelectorAll('tr[data-item-row]'))
+            .filter(r => r.offsetParent !== null);
+    }
+    function setCur(row) {
+        if (curRow) curRow.classList.remove('kb-focus');
+        curRow = row;
+        if (row) { row.classList.add('kb-focus'); row.scrollIntoView({block: 'nearest'}); }
+    }
+    document.querySelectorAll('tr[data-item-row]').forEach(r => {
+        r.addEventListener('click', () => setCur(r));
+    });
+    document.addEventListener('keydown', (e) => {
+        const tag = (document.activeElement && document.activeElement.tagName) || '';
+        const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+        const rows = visibleRows();
+        if (!rows.length) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (typing) return;
+            e.preventDefault();
+            let idx = curRow ? rows.indexOf(curRow) : -1;
+            idx = e.key === 'ArrowDown' ? idx + 1 : idx - 1;
+            idx = Math.max(0, Math.min(rows.length - 1, idx));
+            setCur(rows[idx]);
+        } else if (!typing && (e.key === '1' || e.key === '2' || e.key === '3')) {
+            if (!curRow || rows.indexOf(curRow) === -1) setCur(rows[0]);
+            const map = {'1': 'active', '2': 'inactive', '3': 'none'};
+            const b = curRow.querySelector(`.inspection-toggle[data-status="${map[e.key]}"]`);
+            if (b) { e.preventDefault(); b.click(); }
+        }
+    });
+
+    // ── Issue photos: camera button → file input → upload; remove button ──
+    function slotFor(itemId) {
+        return document.querySelector(`.inspection-photo-slot[data-item-id="${itemId}"]`);
+    }
+    function renderPhoto(itemId, inspId, url) {
+        const slot = slotFor(itemId);
+        if (!slot) return;
+        if (url) {
+            slot.innerHTML =
+                `<a href="${url}" target="_blank" class="inspection-thumb-link">` +
+                `<img src="${url}" class="inspection-thumb" alt="issue photo"></a>` +
+                `<button type="button" class="inspection-photo-remove" ` +
+                `data-inspection-id="${inspId}" data-item-id="${itemId}" title="Remove photo">&times;</button>`;
+        } else {
+            slot.innerHTML =
+                `<button type="button" class="btn btn-sm btn-ghost inspection-photo-btn" ` +
+                `data-item-id="${itemId}" title="Add photo"><i data-lucide="camera"></i></button>`;
+            if (window.lucide) window.lucide.createIcons();
+        }
+    }
+    // Delegate clicks so dynamically-replaced buttons keep working.
+    document.addEventListener('click', (e) => {
+        const add = e.target.closest('.inspection-photo-btn');
+        if (add) {
+            const inp = document.querySelector(
+                `.inspection-photo-input[data-item-id="${add.dataset.itemId}"]`);
+            if (inp) inp.click();
+            return;
+        }
+        const rm = e.target.closest('.inspection-photo-remove');
+        if (rm) {
+            const { inspectionId, itemId } = rm.dataset;
+            fetch(`/inspections/${inspectionId}/items/${itemId}/photo`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({remove: true}),
+            }).then(r => r.ok && renderPhoto(itemId, inspectionId, null))
+              .catch(() => alert('Could not remove photo.'));
+        }
+    });
+    document.querySelectorAll('.inspection-photo-input').forEach(inp => {
+        inp.addEventListener('change', async () => {
+            if (!inp.files || !inp.files[0]) return;
+            const { inspectionId, itemId } = inp.dataset;
+            const fd = new FormData();
+            fd.append('photo', inp.files[0]);
+            const slot = slotFor(itemId);
+            if (slot) slot.classList.add('is-uploading');
+            try {
+                const resp = await fetch(
+                    `/inspections/${inspectionId}/items/${itemId}/photo`,
+                    { method: 'POST', body: fd });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) { alert(data.message || 'Upload failed.'); return; }
+                renderPhoto(itemId, inspectionId, data.photo_url);
+            } catch (e) {
+                alert('Network error during upload: ' + e);
+            } finally {
+                if (slot) slot.classList.remove('is-uploading');
+                inp.value = '';
+            }
+        });
+    });
+})();
+</script>
+<style>
+    tr.kb-focus > td { background: var(--bg-soft); }
+    tr.kb-focus > td:first-child { box-shadow: inset 3px 0 0 0 var(--accent); }
+</style>
+{% endif %}
+
+{# Area filter + expand/collapse — always available, including read-only views. #}
+<script>
+(function() {
+    const filter = document.getElementById('area-filter');
+    const sections = Array.from(document.querySelectorAll('.inspection-section'));
+    const areas = Array.from(document.querySelectorAll('.inspection-area'));
+
+    function setAll(open) {
+        sections.forEach(s => { s.open = open; });
+        areas.forEach(a => { a.open = open; });
+    }
+    const expandBtn = document.getElementById('expand-all');
+    const collapseBtn = document.getElementById('collapse-all');
+    if (expandBtn) expandBtn.addEventListener('click', () => setAll(true));
+    if (collapseBtn) collapseBtn.addEventListener('click', () => setAll(false));
+
+    if (!filter) return;
+    filter.addEventListener('input', () => {
+        const q = filter.value.trim().toLowerCase();
+        sections.forEach(section => {
+            let anyVisible = false;
+            section.querySelectorAll('.inspection-area').forEach(area => {
+                const name = (area.querySelector('summary')?.textContent || '').toLowerCase();
+                const match = !q || name.includes(q);
+                area.style.display = match ? '' : 'none';
+                if (match) { anyVisible = true; if (q) area.open = true; }
+            });
+            // Hide a whole section when none of its areas match; open it on a hit.
+            section.style.display = anyVisible ? '' : 'none';
+            if (q && anyVisible) section.open = true;
+        });
+    });
+})();
+</script>
+
+{% endblock %}

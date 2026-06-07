@@ -11,6 +11,35 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+    # ── Jinja filter: convert SQLite UTC timestamps to local time ────
+    # SQLite's datetime('now') returns UTC. The team is in Asia/Riyadh
+    # (UTC+3), so raw timestamps in templates read 3 hours behind the
+    # wall clock. Apply this filter on any displayed timestamp.
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        from zoneinfo import ZoneInfo as _ZoneInfo
+        _LOCAL_TZ = _ZoneInfo('Asia/Riyadh')
+    except Exception:  # pragma: no cover — zoneinfo missing
+        _LOCAL_TZ = None
+
+    @app.template_filter('localtime')
+    def localtime_filter(value, fmt='%Y-%m-%d %H:%M'):
+        if not value or _LOCAL_TZ is None:
+            return value or ''
+        s = str(value).strip().replace('T', ' ').rstrip('Z')
+        # Strip fractional seconds + offset if present.
+        for sep in ('.', '+'):
+            if sep in s:
+                s = s.split(sep)[0]
+        try:
+            dt = _dt.strptime(s[:19], '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            try:
+                dt = _dt.strptime(s[:16], '%Y-%m-%d %H:%M')
+            except ValueError:
+                return value
+        return dt.replace(tzinfo=_tz.utc).astimezone(_LOCAL_TZ).strftime(fmt)
+
     # ── Jinja filter: humanise enum values ───────────────────────────
     # Used everywhere a status/priority/condition/category/decision is
     # rendered. snake_case becomes Sentence case ("in_progress" ->
@@ -131,6 +160,9 @@ def create_app():
             ('GPU Inventory',      url_for('gpu.inventory'),           'cpu',              is_staff),
             ('GPU Requests',       url_for('gpu.request_list'),        'inbox',            is_staff),
             ('New GPU request',   url_for('gpu.request_new'),         'plus-circle',      True),
+            ('Daily Inspection',   url_for('inspections.dashboard'),   'clipboard-check',  is_staff),
+            ("Today's Inspection", url_for('inspections.today'),       'clipboard-list',   is_staff),
+            ('Inspection History', url_for('inspections.history'),     'history',          is_staff),
             ('Employees',          url_for('employees.list_employees'),'users',            is_staff),
             ('Issue Categories',   url_for('issue_categories.index'),  'tags',             is_staff),
             ('How It Works',       url_for('help.guide'),              'help-circle',      is_staff),
@@ -271,6 +303,7 @@ def create_app():
     from routes.reports import reports_bp
     from routes.issue_categories import issue_categories_bp
     from routes.gpu import gpu_bp
+    from routes.inspections import inspections_bp
     from routes.api import api_bp
     from routes.assistant import assistant_bp
     from app.floor_plan import floor_plan_bp, init_floor_plan
@@ -283,6 +316,7 @@ def create_app():
     app.register_blueprint(reports_bp, url_prefix='/reports')
     app.register_blueprint(issue_categories_bp, url_prefix='/issue-categories')
     app.register_blueprint(gpu_bp, url_prefix='/gpu')
+    app.register_blueprint(inspections_bp, url_prefix='/inspections')
     app.register_blueprint(api_bp, url_prefix='/api/v1')
     app.register_blueprint(assistant_bp, url_prefix='/assistant')
     app.register_blueprint(floor_plan_bp, url_prefix='/floor-plan')

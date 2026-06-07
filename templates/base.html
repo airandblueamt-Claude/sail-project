@@ -148,6 +148,32 @@
                 </details>
             </li>
 
+            {# ── Daily Inspection group ──────────────────────────────── #}
+            <li class="nav-group">
+                <details {% if bp == 'inspections' %}open{% endif %}>
+                    <summary>
+                        <span><i data-lucide="clipboard-check"></i> Daily Inspection</span>
+                        <i data-lucide="chevron-down" class="nav-chevron"></i>
+                    </summary>
+                    <ul>
+                        <li><a href="{{ url_for('inspections.dashboard') }}" class="{% if ep == 'inspections.dashboard' %}active{% endif %}">
+                            <i data-lucide="layout-dashboard"></i> Overview
+                        </a></li>
+                        <li><a href="{{ url_for('inspections.today') }}" class="{% if ep == 'inspections.today' %}active{% endif %}">
+                            <i data-lucide="clipboard-list"></i> Today
+                        </a></li>
+                        <li><a href="{{ url_for('inspections.history') }}" class="{% if ep == 'inspections.history' %}active{% endif %}">
+                            <i data-lucide="history"></i> History
+                        </a></li>
+                        {% if current_user.role == 'admin' %}
+                        <li><a href="{{ url_for('inspections.admin_areas') }}" class="{% if ep and ep.startswith('inspections.admin_') %}active{% endif %}">
+                            <i data-lucide="list-tree"></i> Catalog
+                        </a></li>
+                        {% endif %}
+                    </ul>
+                </details>
+            </li>
+
             {# ── People group ──────────────────────────────────────────── #}
             {% set people_active = bp in ('employees', 'issue_categories') %}
             <li class="nav-group">

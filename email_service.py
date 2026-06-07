@@ -45,6 +45,49 @@ def send_email(to, subject, html_body):
     thread.start()
 
 
+def is_email_configured():
+    """True if an SMTP app password is set, so sends will actually go out."""
+    return bool(SMTP_PASSWORD) and SMTP_PASSWORD != "YOUR_APP_PASSWORD_HERE"
+
+
+def send_email_with_attachment(recipients, subject, html_body,
+                               attachment_name, attachment_bytes,
+                               mimetype="application/octet-stream"):
+    """Send one email with a single binary attachment (e.g. an .xlsx report).
+
+    `recipients` may be a string or a list. Returns True if the send was
+    dispatched, False if SMTP isn't configured (so the caller can warn).
+    """
+    from email.mime.application import MIMEApplication
+
+    if isinstance(recipients, str):
+        recipients = [recipients]
+    recipients = [r.strip() for r in recipients if r and r.strip()]
+    if not recipients:
+        return False
+    if not is_email_configured():
+        print(f"[EMAIL SKIP] No SMTP password. Would send '{subject}' "
+              f"to {recipients} with attachment {attachment_name}")
+        return False
+
+    msg = MIMEMultipart()
+    msg["From"] = f"SAIL System <{SMTP_EMAIL}>"
+    msg["To"] = ", ".join(recipients)
+    msg["Subject"] = f"SAIL - {subject}"
+    msg.attach(MIMEText(html_body, "html"))
+
+    subtype = mimetype.split("/", 1)[-1]
+    part = MIMEApplication(attachment_bytes, _subtype=subtype)
+    part.add_header("Content-Disposition", "attachment",
+                    filename=attachment_name)
+    msg.attach(part)
+
+    thread = threading.Thread(target=_send_async, args=(msg,))
+    thread.daemon = True
+    thread.start()
+    return True
+
+
 def _base_html(content):
     return f"""
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;

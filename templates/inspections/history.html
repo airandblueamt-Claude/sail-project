@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Inspection History{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>Inspection History</h2>
+        <p class="muted">All past inspection rounds. Click a date to open the detail view.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <form method="get" action="{{ url_for('inspections.export_month_xlsx') }}"
+              style="display:flex;gap:6px;align-items:center">
+            <input type="month" name="month" class="input" style="width:150px">
+            <button type="submit" class="btn btn-ghost" title="Download the whole month as an Excel grid">
+                <i data-lucide="download"></i> Month .xlsx
+            </button>
+        </form>
+        <a href="{{ url_for('inspections.dashboard') }}" class="btn btn-ghost">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+<form method="get" action="{{ url_for('inspections.history') }}" class="card"
+      style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+    <div>
+        <label style="display:block;font-size:.8rem;color:var(--text-muted)">From</label>
+        <input type="date" name="from" value="{{ from_date }}">
+    </div>
+    <div>
+        <label style="display:block;font-size:.8rem;color:var(--text-muted)">To</label>
+        <input type="date" name="to" value="{{ to_date }}">
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
+        <input type="checkbox" name="has_inactive" value="1" {% if has_inactive %}checked{% endif %}>
+        Only days with inactive items
+    </label>
+    <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Apply</button>
+        <a href="{{ url_for('inspections.history') }}" class="btn btn-ghost">Clear</a>
+    </div>
+</form>
+
+{% if is_admin %}
+<details class="card" style="margin-bottom:16px">
+    <summary style="cursor:pointer;font-weight:600;display:flex;align-items:center;gap:8px">
+        <i data-lucide="mail"></i> Email a monthly report
+    </summary>
+    <form method="post" action="{{ url_for('inspections.email_month') }}" style="margin-top:12px">
+        {% if not email_ready %}
+        <p class="muted" style="color:var(--red);font-size:.82rem">
+            <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:-2px"></i>
+            Email isn't set up on the server yet (SAIL_SMTP_PASSWORD). Sending won't deliver until that's added.
+        </p>
+        {% endif %}
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+                <label>Month</label>
+                <input type="month" name="month" class="input" value="{{ today_month }}" style="width:160px">
+            </div>
+            <div style="flex:1;min-width:240px">
+                <label>Send to (comma-separated)</label>
+                <input type="text" name="recipients" class="input" required
+                       placeholder="name@aramco.com, other@amt-arabia.net">
+            </div>
+        </div>
+        <div style="margin-top:10px">
+            <label>Message (optional)</label>
+            <textarea name="message" class="input" rows="2" maxlength="1000"></textarea>
+        </div>
+        <div style="margin-top:12px;display:flex;justify-content:flex-end">
+            <button type="submit" class="btn btn-primary"><i data-lucide="send"></i> Send monthly Excel</button>
+        </div>
+    </form>
+</details>
+{% endif %}
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Recorded</th>
+            <th>Inactive</th>
+            <th>Signed off by (Head)</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td>
+                <a href="{{ url_for('inspections.detail', inspection_date=r.inspection_date) }}">
+                    {{ r.inspection_date }}
+                </a>
+            </td>
+            <td>
+                {% if r.submitted_at %}
+                    <span class="badge badge-success">Submitted</span>
+                {% else %}
+                    <span class="badge badge-status-open">Draft</span>
+                {% endif %}
+            </td>
+            <td>{{ r.recorded or 0 }} / {{ r.total or 0 }}</td>
+            <td>
+                {% if r.inactive and r.inactive > 0 %}
+                    <span class="badge badge-status-inactive">{{ r.inactive }}</span>
+                {% else %}
+                    <span class="muted">0</span>
+                {% endif %}
+            </td>
+            <td>{{ r.head_name or '—' }}</td>
+            <td style="text-align:right">
+                <a href="{{ url_for('inspections.export_day_xlsx', inspection_date=r.inspection_date) }}"
+                   class="btn btn-sm btn-ghost" title="Download this day as Excel">
+                    <i data-lucide="download"></i>
+                </a>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted" style="text-align:center;padding:24px">No inspections match.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

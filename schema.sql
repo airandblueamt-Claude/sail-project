@@ -367,6 +367,82 @@ CREATE TABLE IF NOT EXISTS gpu_request_phases (
 );
 CREATE INDEX IF NOT EXISTS idx_gpu_request_phases_req ON gpu_request_phases(request_id);
 
+-- ── Daily Inspection Checklist ─────────────────────────────────────────────
+-- Replaces the Excel "SAIL Daily Inspection Checklist" sheet. One inspection
+-- row per calendar day (UNIQUE), per-item results live in inspection_results.
+-- Rows in inspection_results only appear once an item has been checked — the
+-- absence of a row means "not yet inspected today". Signatures are FKs to
+-- employees and live on the parent inspection row. Once submitted_at is set,
+-- only admins may edit.
+
+CREATE TABLE IF NOT EXISTS inspection_areas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    section       TEXT NOT NULL DEFAULT '',
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_inspection_areas_order ON inspection_areas(display_order);
+
+CREATE TABLE IF NOT EXISTS inspection_items (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    area_id       INTEGER NOT NULL REFERENCES inspection_areas(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    is_applicable INTEGER NOT NULL DEFAULT 1,  -- 0 = N/A for this room (greyed, not counted)
+    created_at    TEXT DEFAULT (datetime('now')),
+    UNIQUE(area_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_inspection_items_area ON inspection_items(area_id, display_order);
+
+CREATE TABLE IF NOT EXISTS inspections (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_date        TEXT NOT NULL UNIQUE,
+    created_by             INTEGER REFERENCES employees(id),
+    inspection_engineer_id INTEGER REFERENCES employees(id),
+    amt_supervisor_id      INTEGER REFERENCES employees(id),
+    sail_supervisor_id     INTEGER REFERENCES employees(id),
+    head_id                INTEGER REFERENCES employees(id),  -- single day sign-off (the head)
+    notes                  TEXT,
+    submitted_at           TEXT,
+    created_at             TEXT DEFAULT (datetime('now')),
+    updated_at             TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_inspections_date ON inspections(inspection_date);
+
+CREATE TABLE IF NOT EXISTS inspection_results (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_id INTEGER NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    item_id       INTEGER NOT NULL REFERENCES inspection_items(id),
+    status        TEXT NOT NULL CHECK(status IN ('active','inactive','none')),
+    notes         TEXT,
+    photo_path    TEXT,                          -- optional evidence photo (uploads/<name>)
+    updated_by    INTEGER REFERENCES employees(id),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(inspection_id, item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_inspection_results_inspection ON inspection_results(inspection_id);
+CREATE INDEX IF NOT EXISTS idx_inspection_results_item       ON inspection_results(item_id, status);
+
+-- Daily inspection split into two owned "sheets" (Infra / Rooms).
+CREATE TABLE IF NOT EXISTS inspection_sheets (
+    name          TEXT PRIMARY KEY,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    assignee_id   INTEGER REFERENCES employees(id)
+);
+
+CREATE TABLE IF NOT EXISTS inspection_sheet_signoffs (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_id INTEGER NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    sheet         TEXT NOT NULL,
+    signed_by     INTEGER REFERENCES employees(id),
+    signed_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(inspection_id, sheet)
+);
+CREATE INDEX IF NOT EXISTS idx_sheet_signoffs_insp ON inspection_sheet_signoffs(inspection_id);
+
 -- ── API tokens (bearer auth for external agents / integrations) ───────────
 -- Token plaintext is shown once at creation; only the sha256 hash is stored.
 -- `scopes` is a comma-separated list — for now {'read'} only; later {'read','write'}.

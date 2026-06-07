@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}SAIL - Inspection Sheets{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>Inspection Sheets &amp; Assignees</h2>
+        <p class="muted">The daily round is split into two sheets. Assign the
+           person responsible for each — their name and progress show on the
+           Today page, and they sign off their own sheet.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('inspections.admin_areas') }}" class="btn btn-ghost">
+            <i data-lucide="layers"></i> Areas
+        </a>
+        <a href="{{ url_for('inspections.admin_items') }}" class="btn btn-ghost">
+            <i data-lucide="list-tree"></i> Items
+        </a>
+        <a href="{{ url_for('inspections.dashboard') }}" class="btn btn-ghost">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th style="width:120px">Sheet</th>
+            <th>Covers</th>
+            <th style="width:280px">Assigned to</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in sheets %}
+        <tr>
+            <td><strong>{{ s.name }}</strong></td>
+            <td class="muted" style="font-size:.85rem">
+                {{ sheet_sections.get(s.name, []) | join(', ') }}
+            </td>
+            <td>
+                <form method="post" action="{{ url_for('inspections.admin_sheets_assign') }}"
+                      style="display:flex;gap:8px;align-items:center">
+                    <input type="hidden" name="sheet" value="{{ s.name }}">
+                    <select name="assignee_id" class="input" style="flex:1">
+                        <option value="">— Unassigned —</option>
+                        {% for e in employees %}
+                        <option value="{{ e.id }}" {% if e.id == s.assignee_id %}selected{% endif %}>
+                            {{ e.name }} ({{ e.role }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p class="muted" style="margin-top:14px;font-size:.85rem">
+    <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i>
+    Carlo and Mohammed Zobir need staff accounts first
+    (<a href="{{ url_for('employees.new_employee') }}">add an employee</a>).
+    Anyone can still fill any sheet — the assignee is the owner, and the system
+    records who recorded each item.
+</p>
+
+{% endblock %}

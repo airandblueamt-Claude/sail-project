@@ -1384,3 +1384,168 @@ pre { padding: 12px 14px; overflow-x: auto; border-left: 2px solid var(--rule); 
 .block-section [data-row] > select { min-width: 0; }
 .block-section [data-row] { min-width: 0; }
 .block-section { min-width: 0; }
+
+/* ── Daily Inspection ─────────────────────────────────────────────── */
+/* Three-way toggle: Active / Inactive / None. The "on" state lights up
+ * in the appropriate semantic colour; off-state buttons look like ghost
+ * buttons so the chosen value visually dominates the row. */
+.badge-status-active   { color: var(--green); }
+.badge-status-active::before { background: var(--green); }
+.badge-status-inactive { color: var(--red); }
+.badge-status-inactive::before { background: var(--red); }
+.badge-status-none     { color: var(--text-muted); }
+.badge-status-none::before { background: var(--text-muted); }
+
+.inspection-toggle-group { display: inline-flex; gap: 6px; }
+.inspection-toggle {
+    min-width: 84px;
+    min-height: 36px;            /* comfortable touch target on a tablet */
+    font-weight: 600;
+    background: transparent;
+    border: 1.5px solid var(--rule);
+    color: var(--text-muted);
+    transition: background .12s, border-color .12s, color .12s;
+}
+/* Colour hint even when OFF, so the three choices read at a glance. */
+.inspection-toggle-active:not(.is-on)   { border-color: color-mix(in srgb, var(--green) 45%, var(--rule)); color: var(--green); }
+.inspection-toggle-inactive:not(.is-on) { border-color: color-mix(in srgb, var(--red) 45%, var(--rule));   color: var(--red); }
+.inspection-toggle:hover:not([disabled]) { filter: brightness(1.04); }
+.inspection-toggle.is-on.inspection-toggle-active {
+    background: var(--green); border-color: var(--green); color: #fff;
+}
+.inspection-toggle.is-on.inspection-toggle-inactive {
+    background: var(--red); border-color: var(--red); color: #fff;
+}
+.inspection-toggle.is-on.inspection-toggle-none {
+    background: var(--text-muted); border-color: var(--text-muted); color: #fff;
+}
+.inspection-toggle[disabled] { cursor: not-allowed; opacity: .55; }
+.inspection-area summary::-webkit-details-marker { display: none; }
+.inspection-area summary { list-style: none; }
+.inspection-section summary::-webkit-details-marker { display: none; }
+.inspection-section summary { list-style: none; }
+
+/* ── Section grouping: prominent header + indented, railed child areas ── */
+.inspection-section {
+    margin-bottom: 16px;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bg-card);
+}
+.inspection-section-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 13px 16px;
+    cursor: pointer;
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+}
+.inspection-section[open] .inspection-section-head { border-bottom: 1px solid var(--rule); }
+.inspection-section-title {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 1.12rem; color: var(--accent); letter-spacing: .01em;
+}
+.inspection-section-caret { width: 18px; height: 18px; transition: transform .15s; flex: none; }
+.inspection-section[open] .inspection-section-caret { transform: rotate(90deg); }
+.inspection-section-body {
+    position: relative;
+    padding: 14px 14px 14px 30px;
+    background: var(--bg-soft);
+}
+/* vertical rail tying the child areas to their section */
+.inspection-section-body::before {
+    content: ''; position: absolute; left: 14px; top: 10px; bottom: 14px; width: 2px;
+    background: var(--rule);
+    background: color-mix(in srgb, var(--accent) 35%, var(--rule));
+    border-radius: 2px;
+}
+/* child area cards read clearly as nested children, not page-level cards */
+.inspection-section-body .inspection-area {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    box-shadow: none;
+    margin-bottom: 10px;
+    position: relative;
+}
+.inspection-section-body .inspection-area:last-child { margin-bottom: 0; }
+/* short connector from the rail to each area card */
+.inspection-section-body .inspection-area::before {
+    content: ''; position: absolute; left: -16px; top: 22px; width: 14px; height: 2px;
+    background: var(--rule);
+    background: color-mix(in srgb, var(--accent) 35%, var(--rule));
+}
+/* let the area chevron rotate on open, same as the section caret */
+.inspection-area .nav-chevron { transition: transform .15s; }
+.inspection-area[open] > summary .nav-chevron { transform: rotate(180deg); }
+
+/* ── Sheet: the two owned halves (Infra / Rooms) — top-level banner ── */
+.inspection-sheet { margin-bottom: 24px; }
+.inspection-sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap;
+    padding: 13px 16px;
+    border-radius: 12px 12px 0 0;
+    background: var(--accent); color: #fff;
+}
+.inspection-sheet-titlewrap { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.inspection-sheet-name { font-size: 1.2rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.inspection-sheet-owner { display: inline-flex; align-items: center; gap: 6px; font-size: .92rem; font-weight: 600; }
+.inspection-sheet-owner .muted { color: rgba(255,255,255,.7); }
+.inspection-sheet-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; }
+.inspection-sheet-progress { min-width: 130px; }
+.inspection-sheet-bar { height: 6px; background: rgba(255,255,255,.3); border-radius: 4px; overflow: hidden; margin-top: 3px; }
+.inspection-sheet-bar > div { height: 100%; background: #fff; transition: width .25s; }
+.inspection-sheet-head .btn-ghost { color: #fff; border-color: rgba(255,255,255,.45); }
+.inspection-sheet-head .btn-primary { background: #fff; color: var(--accent); border-color: #fff; }
+.inspection-sheet-head .badge { background: rgba(255,255,255,.2); color: #fff; }
+.inspection-sheet-head .badge-status-active { background: #fff; color: var(--accent); }
+/* sections stack flush under the banner as one card */
+.inspection-sheet > .inspection-section { margin-bottom: 0; border-radius: 0; border-top: none; }
+.inspection-sheet > .inspection-section:last-child { border-radius: 0 0 12px 12px; }
+
+/* Whole-row status tint — fast visual scan of an area. */
+.inspection-table tr[data-item-row] > td:first-child { border-left: 3px solid transparent; }
+.inspection-table tr[data-status="active"]   > td:first-child { border-left-color: var(--green); }
+.inspection-table tr[data-status="inactive"] > td:first-child { border-left-color: var(--red); }
+.inspection-table tr[data-status="inactive"] > td { background: var(--red-bg); }
+.inspection-table tr[data-status="none"]     > td:first-child { border-left-color: var(--text-muted); }
+.inspection-table tr.inspection-na > td { opacity: .5; font-style: italic; }
+.inspection-table tr.inspection-na > td:first-child { border-left: 3px solid transparent; }
+
+/* ── Issue photo (evidence) in the note cell ── */
+.inspection-note-cell { display: flex; align-items: center; gap: 8px; }
+.inspection-note-cell .inspection-note { flex: 1; min-width: 70px; }
+.inspection-photo-slot { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.inspection-photo-slot.is-uploading { opacity: .5; pointer-events: none; }
+.inspection-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; border: 1px solid var(--rule); display: block; }
+.inspection-thumb-link { line-height: 0; }
+.inspection-photo-remove { border: none; background: transparent; color: var(--red); font-size: 1.15rem; line-height: 1; cursor: pointer; padding: 0 2px; }
+.inspection-photo-btn { padding: 5px 9px; }
+
+/* ── Tablet / phone: stack the 4-column item table into readable cards ── */
+@media (max-width: 760px) {
+    .inspection-table thead { display: none; }
+    .inspection-table, .inspection-table tbody,
+    .inspection-table tr, .inspection-table td { display: block; width: auto; }
+    .inspection-table tr[data-item-row],
+    .inspection-table tr.inspection-na {
+        border: 1px solid var(--rule); border-left-width: 4px;
+        border-radius: 8px; margin-bottom: 8px; padding: 8px 10px;
+    }
+    .inspection-table td { border: none; padding: 4px 0; }
+    .inspection-table td:first-child { font-weight: 600; }
+    .inspection-table tr[data-status="active"]   { border-left-color: var(--green); }
+    .inspection-table tr[data-status="inactive"] { border-left-color: var(--red); background: var(--red-bg); }
+    .inspection-table tr[data-status="none"]     { border-left-color: var(--text-muted); }
+    /* full-width, bigger status buttons for thumbs */
+    .inspection-toggle-group { width: 100%; }
+    .inspection-toggle { flex: 1; min-width: 0; min-height: 40px; }
+    /* drop the "Updated" timestamp on small screens to cut clutter */
+    .inspection-table td:nth-child(4) { display: none; }
+    .inspection-note-cell { flex-wrap: wrap; }
+    /* tighten the section indent/rail on narrow screens */
+    .inspection-section-body { padding: 10px 8px 10px 16px; }
+    .inspection-section-body::before { left: 7px; }
+    .inspection-section-body .inspection-area::before { display: none; }
+    .inspection-section-head { flex-wrap: wrap; }
+}

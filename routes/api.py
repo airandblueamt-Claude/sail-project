@@ -455,6 +455,146 @@ def list_gpu_requests():
     return jsonify(items=[dict(r) for r in rows], total=len(rows))
 
 
+# ── inspections ────────────────────────────────────────────────────────────
+
+def _serialize_inspection_summary(r):
+    return {
+        'id': r['id'],
+        'date': r['inspection_date'],
+        'submitted_at': r['submitted_at'],
+        'created_at': r['created_at'],
+        'recorded': int(r['recorded'] or 0),
+        'total_items': int(r['total'] or 0),
+        'inactive': int(r['inactive'] or 0),
+        'engineer': r['engineer_name'],
+        'amt_supervisor': r['amt_supervisor_name'],
+        'sail_supervisor': r['sail_supervisor_name'],
+    }
+
+
+@api_bp.route('/inspections')
+@require_token('read')
+def list_inspections():
+    limit, offset, err = _paginate()
+    if err:
+        return err
+    where, params = [], []
+    if request.args.get('from'):
+        where.append('i.inspection_date >= ?'); params.append(request.args['from'])
+    if request.args.get('to'):
+        where.append('i.inspection_date <= ?'); params.append(request.args['to'])
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    with get_db() as conn:
+        total_count = _count(conn, f"SELECT i.id FROM inspections i {where_sql}",
+                             tuple(params))
+        rows = conn.execute(
+            f"""SELECT i.id, i.inspection_date, i.submitted_at, i.created_at,
+                       e.name  AS engineer_name,
+                       am.name AS amt_supervisor_name,
+                       ss.name AS sail_supervisor_name,
+                       (SELECT COUNT(*) FROM inspection_results r
+                          WHERE r.inspection_id = i.id) AS recorded,
+                       (SELECT COUNT(*) FROM inspection_results r
+                          WHERE r.inspection_id = i.id
+                            AND r.status = 'inactive') AS inactive,
+                       (SELECT COUNT(*) FROM inspection_items
+                          WHERE is_active = 1) AS total
+                FROM inspections i
+                LEFT JOIN employees e  ON i.inspection_engineer_id = e.id
+                LEFT JOIN employees am ON i.amt_supervisor_id      = am.id
+                LEFT JOIN employees ss ON i.sail_supervisor_id     = ss.id
+                {where_sql}
+                ORDER BY i.inspection_date DESC
+                LIMIT ? OFFSET ?""",
+            tuple(params) + (limit, offset)
+        ).fetchall()
+    return jsonify(items=[_serialize_inspection_summary(r) for r in rows],
+                   total=total_count, limit=limit, offset=offset)
+
+
+@api_bp.route('/inspections/<inspection_date>')
+@require_token('read')
+def get_inspection(inspection_date):
+    with get_db() as conn:
+        head = conn.execute(
+            """SELECT i.*,
+                      e.name  AS engineer_name,
+                      am.name AS amt_supervisor_name,
+                      ss.name AS sail_supervisor_name
+               FROM inspections i
+               LEFT JOIN employees e  ON i.inspection_engineer_id = e.id
+               LEFT JOIN employees am ON i.amt_supervisor_id      = am.id
+               LEFT JOIN employees ss ON i.sail_supervisor_id     = ss.id
+               WHERE i.inspection_date = ?""",
+            (inspection_date,)).fetchone()
+        if not head:
+            return jsonify(error='not_found',
+                           message=f"No inspection for '{inspection_date}'."), 404
+        rows = conn.execute(
+            """SELECT ar.id AS area_id, ar.name AS area_name,
+                      ar.display_order AS area_order,
+                      it.id AS item_id, it.name AS item_name,
+                      it.display_order AS item_order,
+                      r.status, r.notes, r.updated_at
+               FROM inspection_areas ar
+               JOIN inspection_items it ON it.area_id = ar.id
+               LEFT JOIN inspection_results r
+                      ON r.item_id = it.id AND r.inspection_id = ?
+               WHERE ar.is_active = 1 AND it.is_active = 1
+               ORDER BY ar.display_order, ar.name, it.display_order, it.name""",
+            (head['id'],)).fetchall()
+
+    by_area = {}
+    for r in rows:
+        a = by_area.setdefault(r['area_id'], {
+            'id': r['area_id'], 'name': r['area_name'], 'items': []
+        })
+        a['items'].append({
+            'id': r['item_id'], 'name': r['item_name'],
+            'status': r['status'], 'notes': r['notes'],
+            'updated_at': r['updated_at'],
+        })
+    return jsonify({
+        'id': head['id'],
+        'date': head['inspection_date'],
+        'submitted_at': head['submitted_at'],
+        'notes': head['notes'],
+        'engineer': head['engineer_name'],
+        'amt_supervisor': head['amt_supervisor_name'],
+        'sail_supervisor': head['sail_supervisor_name'],
+        'areas': list(by_area.values()),
+    })
+
+
+@api_bp.route('/inspections/items/recurring')
+@require_token('read')
+def inspection_recurring_problems():
+    try:
+        days  = int(request.args.get('days',  30))
+        limit = int(request.args.get('limit', 10))
+    except ValueError:
+        return jsonify(error='bad_request',
+                       message='days and limit must be integers.'), 400
+    days  = max(1, min(days, 365))
+    limit = max(1, min(limit, 100))
+    with get_db() as conn:
+        rows = conn.execute(
+            f"""SELECT it.id AS item_id, it.name AS item_name,
+                       ar.name AS area_name, COUNT(*) AS hits
+                FROM inspection_results r
+                JOIN inspection_items it ON r.item_id = it.id
+                JOIN inspection_areas ar ON it.area_id = ar.id
+                JOIN inspections i        ON r.inspection_id = i.id
+                WHERE r.status = 'inactive'
+                  AND i.inspection_date >= date('now', '-{int(days)} days')
+                GROUP BY it.id
+                ORDER BY hits DESC, item_name
+                LIMIT ?""",
+            (limit,)).fetchall()
+    return jsonify(items=[dict(r) for r in rows],
+                   total=len(rows), days=days)
+
+
 # ── aggregate stats ────────────────────────────────────────────────────────
 
 @api_bp.route('/stats')

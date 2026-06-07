@@ -1,0 +1,128 @@
+{# Shared macro: renders one inspection area as a collapsible block of items
+   with three-way toggle buttons (Active / Inactive / None) and an inline
+   notes field per item. Read-only when editable=False.
+   N/A items (is_applicable == 0) render greyed and are not counted. #}
+
+{% macro area_panel(group, results, inspection, editable, open_default=True) %}
+{% set area = group.area %}
+{# Use bracket access — group.items would resolve to dict.items() #}
+{% set all_items = group['items'] %}
+{% set items = all_items | selectattr('is_applicable', 'equalto', 1) | list %}
+{% set ns = namespace(recorded=0, inactive=0) %}
+{% for item in items %}
+    {% set r = results.get(item.id) %}
+    {% if r %}
+        {% set ns.recorded = ns.recorded + 1 %}
+        {% if r.status == 'inactive' %}{% set ns.inactive = ns.inactive + 1 %}{% endif %}
+    {% endif %}
+{% endfor %}
+{% set recorded_n = ns.recorded %}
+{% set inactive_n = ns.inactive %}
+{% set applicable_n = items | length %}
+
+<details class="card inspection-area" id="area-{{ area.id }}" {% if open_default %}open{% endif %}>
+    <summary style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:12px">
+        <span style="font-weight:600;font-size:1.05rem">{{ area.name }}</span>
+        <span style="display:flex;gap:10px;align-items:center;font-size:.85rem">
+            {% if editable and inspection %}
+            <button type="button" class="btn btn-sm btn-ghost bulk-active"
+                    data-inspection-id="{{ inspection.id }}"
+                    data-area-ids="{{ area.id }}"
+                    title="Mark every item in this area Active (keeps ones you've already set)">
+                <i data-lucide="check-check"></i> All Active
+            </button>
+            {% endif %}
+            <span class="muted">{{ recorded_n }} / {{ applicable_n }}</span>
+            {% if inactive_n > 0 %}
+                <span class="badge badge-status-inactive">{{ inactive_n }} inactive</span>
+            {% elif recorded_n == applicable_n and applicable_n > 0 %}
+                <span class="badge badge-status-active">All clear</span>
+            {% endif %}
+            <i data-lucide="chevron-down" class="nav-chevron"></i>
+        </span>
+    </summary>
+
+    <table class="data-table compact inspection-table" style="margin-top:8px">
+        <thead>
+            <tr>
+                <th style="width:38%">Item</th>
+                <th style="width:300px">Status</th>
+                <th>Note</th>
+                <th style="width:130px;text-align:right">Updated</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in all_items %}
+            {% if item.is_applicable == 0 %}
+            {# N/A — not applicable for this room: greyed, no controls, not counted. #}
+            <tr class="inspection-na">
+                <td>{{ item.name }}</td>
+                <td><span class="badge badge-muted">N/A</span>
+                    <span class="muted" style="font-size:.78rem"> not applicable</span></td>
+                <td></td>
+                <td style="text-align:right">—</td>
+            </tr>
+            {% else %}
+            {% set r = results.get(item.id) %}
+            {% set cur_status = r.status if r else '' %}
+            <tr data-item-row="{{ item.id }}" data-status="{{ cur_status }}">
+                <td>{{ item.name }}</td>
+                <td>
+                    <div class="inspection-toggle-group" role="group" aria-label="Status for {{ item.name }}">
+                    {% for s, label in [('active','Active'), ('inactive','Inactive'), ('none','None')] %}
+                        <button type="button"
+                                class="btn btn-sm inspection-toggle inspection-toggle-{{ s }} {% if cur_status == s %}is-on{% endif %}"
+                                data-inspection-id="{{ inspection.id if inspection else '' }}"
+                                data-item-id="{{ item.id }}"
+                                data-status="{{ s }}"
+                                {% if not editable %}disabled{% endif %}>
+                            {{ label }}
+                        </button>
+                    {% endfor %}
+                    </div>
+                </td>
+                <td>
+                    <div class="inspection-note-cell">
+                        <input type="text"
+                               class="input inspection-note"
+                               data-inspection-id="{{ inspection.id if inspection else '' }}"
+                               data-item-id="{{ item.id }}"
+                               placeholder="optional"
+                               value="{{ r.notes if r and r.notes else '' }}"
+                               maxlength="500"
+                               {% if not editable %}readonly{% endif %}>
+                        {% if editable %}
+                        <input type="file" accept="image/*" capture="environment"
+                               class="inspection-photo-input"
+                               data-inspection-id="{{ inspection.id if inspection else '' }}"
+                               data-item-id="{{ item.id }}" hidden>
+                        {% endif %}
+                        <span class="inspection-photo-slot" data-item-id="{{ item.id }}">
+                            {% if r and r.photo_path %}
+                                <a href="{{ url_for('static', filename=r.photo_path) }}" target="_blank" class="inspection-thumb-link">
+                                    <img src="{{ url_for('static', filename=r.photo_path) }}" class="inspection-thumb" alt="issue photo">
+                                </a>
+                                {% if editable %}
+                                <button type="button" class="inspection-photo-remove"
+                                        data-inspection-id="{{ inspection.id }}"
+                                        data-item-id="{{ item.id }}" title="Remove photo">&times;</button>
+                                {% endif %}
+                            {% elif editable %}
+                                <button type="button" class="btn btn-sm btn-ghost inspection-photo-btn"
+                                        data-item-id="{{ item.id }}" title="Add photo">
+                                    <i data-lucide="camera"></i>
+                                </button>
+                            {% endif %}
+                        </span>
+                    </div>
+                </td>
+                <td style="text-align:right;font-size:.78rem;color:var(--text-muted)" data-updated-cell="{{ item.id }}">
+                    {{ (r.updated_at | localtime) if r and r.updated_at else '—' }}
+                </td>
+            </tr>
+            {% endif %}
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endmacro %}
